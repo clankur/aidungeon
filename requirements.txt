@@ -1,0 +1,4 @@
+typeguard
+nltk
+google-generativeai
+einops
