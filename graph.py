@@ -10,32 +10,23 @@ class KnowledgeGraph:
         self.graph = {}
 
     @typechecked
-    def add_entity(self, name: str) -> str:
-        entity_id = str(uuid.uuid4())
-        self.graph[entity_id] = {"name": name}
-        return entity_id
+    def add_entity(self, name: str) -> None:
+        self.graph[name] = {"name": name}
 
     @typechecked
-    def add_edge(self, subject_id: str, relationship: str, object_id: str) -> None:
-        if subject_id not in self.graph:
-            raise ValueError(f"Subject not found in graph: {subject_id}")
-        if object_id not in self.graph:
-            raise ValueError(f"Object not found in graph: {object_id}")
-        self.graph[subject_id][relationship] = object_id
+    def add_edge(self, subject: str, relationship: str, object: str) -> None:
+        if subject not in self.graph:
+            self.add_entity(subject)
+        if object not in self.graph:
+            self.add_entity(object)
+        self.graph[subject][relationship] = object
 
     @typechecked
     @staticmethod
     def build_graph(triples: List[Tuple[str, str, str]]) -> "KnowledgeGraph":
         kg = KnowledgeGraph()
-        name_to_id = {}
-
         for subject, relationship, obj in triples:
-            if subject not in name_to_id:
-                name_to_id[subject] = kg.add_entity(subject)
-            if obj not in name_to_id:
-                name_to_id[obj] = kg.add_entity(obj)
-            subject_id, object_id = name_to_id[subject], name_to_id[obj]
-            kg.add_edge(subject_id, relationship, object_id)
+            kg.add_edge(subject, relationship, obj)
         return kg
 
 
@@ -43,16 +34,34 @@ class KnowledgeGraph:
 
 
 # Q/A
-# how do we seperate shared names when adding edges
-#   use object ids when adding edges
-#   alternatively we can assume names are unique
+# how do we seperate shared entity names
+#   Solution: use object ids when adding edges
+#   Solution: alternatively we can assume names are unique [X]
+
+# how do we handle bidirectional relationships?
+#   Bidrectional: Bob is married to Alice so Alice is married to Bob
+#   Not bidirectional: Bob owns Jason so Jason's owner is Bob
+#       treat owns as a seperate edge as owner
+
 # how do we handle multiple of something ie).
 #   Bob owns multiple dogs Jason and Carl
 #   List of dogs = [Jason, Carl]
-# when adding edges we can indicate if the edge is Fixed or Infinite/Array or List
-#   if over capacity, raise an error
-#   ie). can have only 1 (fixed) wife but maybe infinite dogs
-# do we want predefine relationships/edges OR support dynamic edges?
-#   then we can define relationship constraints to be fixed or infinite
+#   Solution: when adding edges we can indicate if the edge is Fixed or Infinite/Array or List
+#       if over capacity, raise an error
+#       ie). can have only 1 (fixed) wife but maybe infinite dogs
 
+# do we want predefine relationships/edges OR support dynamic edges?
+#   ie). do we have fixed set of edges/relationships an object in the graph can have?
+#   simpler and more structured if we predefine
+#   Entity's can have these set of edges {
+#       owns: [List]
+#       married: [1 element]
+#       on_head: [1 element]
+#       on_torso:
+#       on_waste:
+#       on_back:
+#       in_left_hand:
+#       in_right_hand:
+#       location: (?)
+#   }
 # %%
