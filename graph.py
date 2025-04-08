@@ -64,4 +64,9 @@ class KnowledgeGraph:
 #       in_right_hand:
 #       location: (?)
 #   }
+
+# do we need to build seperate schemas for each entity type?
+#   ie). human has a different schema from pet, location, object, etc
+#   how granular do we want our schemas?
+#       pet and human are similar enough that we can treat them the same
 # %%

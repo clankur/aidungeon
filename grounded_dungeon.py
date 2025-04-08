@@ -5,23 +5,6 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 import einops
 
-# %%
-edges = [
-    ("Bob", "owns", "Jason"),
-    ("Bob", "owns", "Carl"),
-    ("Bob", "married", "Alice"),
-    ("Bob", "on_torso", "Shirt that says 'I heart cats'"),
-    ("Bob", "on_torso", "Pants"),
-    ("Jessica", "owns", "Doug"),
-    ("Jessica", "owns", "Kate"),
-    ("Jessica", "on_head", "Hat"),
-    ("Jessica", "on_torso", "Shirt"),
-    ("Jessica", "on_waist", "Pants"),
-]
-
-kg = KnowledgeGraph.build_graph(edges)
-print(kg.graph)
-
 
 # %%
 def cosine_similarity(vec_a: torch.Tensor, vec_b: torch.Tensor) -> float:
@@ -48,8 +31,9 @@ def cosine_similarity(vec_a: torch.Tensor, vec_b: torch.Tensor) -> float:
 # %%
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
-        self.graph = graph
         model_name = "bert-base-uncased"
+
+        self.graph = graph
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
 
@@ -73,7 +57,6 @@ class Retriever:
     def retrieve(self, query: str) -> List[str]:
         retrieved_edges = []
         query_embedding = self.encode_text(query)
-
         for entity in self.graph.graph:
             for relationship in self.graph.graph[entity]:
                 triple = (
@@ -81,13 +64,38 @@ class Retriever:
                 )
                 triple_embedding = self.encode_text(triple)
                 similarity = cosine_similarity(query_embedding, triple_embedding)
-                if similarity > 0.7:
+                if similarity > 0.6:
                     retrieved_edges.append(triple)
         return retrieved_edges
 
 
 # %%
+edges = [
+    ("Bob", "owns", "Jason"),
+    ("Bob", "owns", "Carl"),
+    ("Bob", "married", "Alice"),
+    ("Bob", "on_torso", "Shirt that says 'I heart cats'"),
+    ("Bob", "on_torso", "Pants"),
+    ("Jessica", "owns", "Doug"),
+    ("Jessica", "owns", "Kate"),
+    ("Jessica", "on_head", "Hat"),
+    ("Jessica", "on_torso", "Shirt"),
+    ("Jessica", "on_waist", "Pants"),
+]
+
+kg = KnowledgeGraph.build_graph(edges)
+print(kg.graph)
+
+
 retriever = Retriever(kg)
 retriever.retrieve("Bob owns a cat")
+
+# %%
+retriever.retrieve("Jessica loves dogs")
+
+# %%
+# alternate retrieval approaches
+#   cross attend between edges and the query and select the edges with High Scores (?)
+#   leverage graph spatial structure (?), use GNN (???)
 
 # %%
