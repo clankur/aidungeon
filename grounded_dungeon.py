@@ -4,6 +4,7 @@ from typing import List
 import torch
 from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
+from sentence_transformers import SentenceTransformer
 
 
 # %%
@@ -50,38 +51,41 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
 # %%
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
-        model_name = "bert-base-uncased"
+        model_name = "sentence-transformers/all-MiniLM-L6-v2"
         self.graph = graph
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
+        self.encoder = SentenceTransformer(model_name)
 
         ner_model_name = "dslim/bert-base-NER"
         self.ner_model = pipeline("ner", model=ner_model_name)
 
     def get_relevant_entities(self, query: str) -> List[str]:
         ner_results = self.ner_model(query)
-        return [result["word"] for result in ner_results]
+        return [
+            result["word"]
+            for result in ner_results
+            if result["word"] in self.graph.graph
+        ]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
-        Encode text into an embedding vector using the BERT model's CLS token.
+        Encode text into an embedding vector using the sentence-transformer model.
 
         Args:
             text: The text to encode
 
         Returns:
-            torch.Tensor: The embedding vector from the CLS token
+            torch.Tensor: The embedding vector
         """
-        inputs = self.tokenizer(text, return_tensors="pt", truncation=True)
-        outputs = self.model(**inputs)
-        # Extract the CLS token embedding (first token of the sequence)
-        return outputs.last_hidden_state[:, 0, :]
+        embedding = self.encoder.encode(text, convert_to_tensor=True)
+        embedding = einops.rearrange(embedding, "d -> 1 d")
+        return embedding
 
     def retrieve(self, query: str, threshold: float = 0.75) -> List[str]:
         retrieved_edges = []
         query_embedding = self.encode_text(query)
         relevant_entities = self.get_relevant_entities(query)
-        print(relevant_entities)
+        if not relevant_entities:
+            raise ValueError("No relevant entities found in the graph")
         # convert graph to n_edges x C tensor
         triples = []
         relationships = []
@@ -144,6 +148,9 @@ retriever.retrieve("Who is Bob's spouse?")
 retriever.retrieve("Jessica is Bob's what?")
 
 # %%
+retriever.retrieve("What is Jessica equipped?")
+
+
 # alternate retrieval approaches
 #   cross attend between edges and the query and select the edges with High Scores (?)
 #   leverage graph spatial structure (?), use GNN (???)
