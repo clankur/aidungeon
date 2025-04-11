@@ -2,7 +2,7 @@
 from graph import KnowledgeGraph
 from typing import List
 import torch
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
 
 
@@ -51,74 +51,78 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
         model_name = "bert-base-uncased"
-
         self.graph = graph
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
 
-        # convert graph to n_edges x C tensor
-        triples = []
-        self.relationships = []
-        for entity in self.graph.graph:
-            for relationship in self.graph.graph[entity]:
-                triple = (
-                    f"{entity} {relationship} {self.graph.graph[entity][relationship]}"
-                )
-                self.relationships.append(triple)
-                triple_embedding = self.encode_text(triple)
-                triple_embedding = einops.rearrange(triple_embedding, "b d -> (b d)")
-                triples.append(triple_embedding)
+        ner_model_name = "dslim/bert-base-NER"
+        self.ner_model = pipeline("ner", model=ner_model_name)
 
-        self.relationship_embeddings = torch.stack(triples)
+    def get_relevant_entities(self, query: str) -> List[str]:
+        ner_results = self.ner_model(query)
+        return [result["word"] for result in ner_results]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
-        Encode text into an embedding vector using the sentence transformer model.
+        Encode text into an embedding vector using the BERT model's CLS token.
 
         Args:
             text: The text to encode
 
         Returns:
-            torch.Tensor: The embedding vector
+            torch.Tensor: The embedding vector from the CLS token
         """
-
         inputs = self.tokenizer(text, return_tensors="pt", truncation=True)
         outputs = self.model(**inputs)
-        embedding = outputs.last_hidden_state.mean(dim=1)
-        embedding = einops.rearrange(embedding, "b d -> b d")
-        return embedding
+        # Extract the CLS token embedding (first token of the sequence)
+        return outputs.last_hidden_state[:, 0, :]
 
     def retrieve(self, query: str, threshold: float = 0.75) -> List[str]:
         retrieved_edges = []
         query_embedding = self.encode_text(query)
-        print(query_embedding.shape)
-        print(self.relationship_embeddings.shape)
+        relevant_entities = self.get_relevant_entities(query)
+        print(relevant_entities)
+        # convert graph to n_edges x C tensor
+        triples = []
+        relationships = []
+        for entity in relevant_entities:
+            for relationship in self.graph.graph[entity]:
+                triple = (
+                    f"{entity} {relationship} {self.graph.graph[entity][relationship]}"
+                )
+                relationships.append(triple)
+                triple_embedding = self.encode_text(triple)
+                triple_embedding = einops.rearrange(triple_embedding, "b d -> (b d)")
+                triples.append(triple_embedding)
+
+        relationship_embeddings = torch.stack(triples)
 
         logits = einops.einsum(
             query_embedding,
-            self.relationship_embeddings,
+            relationship_embeddings,
             "Q_len D, n_edges D -> Q_len n_edges",
         )
 
         scores = quiet_softmax(logits)
         print(scores)
-        print(self.relationships)
+        print(relationships)
 
         return retrieved_edges
 
 
 # %%
 edges = [
-    ("Bob", "owns", "Jason"),
-    ("Bob", "owns", "Carl"),
-    ("Bob", "married", "Alice"),
-    ("Bob", "on_torso", "Shirt that says 'I heart cats'"),
-    ("Bob", "on_torso", "Pants"),
-    ("Jessica", "owns", "Doug"),
-    ("Jessica", "owns", "Kate"),
-    ("Jessica", "on_head", "Hat"),
-    ("Jessica", "on_torso", "Shirt"),
-    ("Jessica", "on_waist", "Pants"),
+    ("Bob", "pet", "Jason"),
+    ("Bob", "pet", "Carl"),
+    ("Bob", "spouse", "Jessica"),
+    ("Bob", "torso", "Shirt'"),
+    ("Bob", "waist", "Pants"),
+    ("Jessica", "pet", "Doug"),
+    ("Jessica", "pet", "Kate"),
+    ("Jessica", "spouse", "Bob"),
+    ("Jessica", "head", "Hat"),
+    ("Jessica", "torso", "Shirt"),
+    ("Jessica", "waist", "Pants"),
 ]
 
 kg = KnowledgeGraph.build_graph(edges)
@@ -126,10 +130,18 @@ print(kg.graph)
 
 
 retriever = Retriever(kg)
-retriever.retrieve("Who is Bob's wife?")
+retriever.retrieve("Who is Bob's dog?")
 
 # %%
 retriever.retrieve("Jessica loves dogs")
+
+# %%
+retriever.retrieve("What is Bob wearing?")
+# %%
+retriever.retrieve("Who is Bob's spouse?")
+
+# %%
+retriever.retrieve("Jessica is Bob's what?")
 
 # %%
 # alternate retrieval approaches
