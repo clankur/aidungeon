@@ -31,13 +31,14 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
 # %%
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
-        model_name = "sentence-transformers/all-MiniLM-L6-v2"
+        model_name = "OpenMatch/cocodr-base-msmarco"
         # other model choices
         # FacebookAI/xlm-roberta-large
         # OpenMatch/cocodr-base-msmarco => good retrievers
         # answerdotai/ModernBERT-base
         self.graph = graph
-        self.encoder = SentenceTransformer(model_name)
+        self.encoder = AutoModel.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
         ner_model_name = "dslim/bert-base-NER"
         self.ner_model = pipeline("ner", model=ner_model_name)
@@ -60,9 +61,11 @@ class Retriever:
         Returns:
             torch.Tensor: The embedding vector
         """
-        embedding = self.encoder.encode(text, convert_to_tensor=True)
-        embedding = einops.rearrange(embedding, "C -> 1 C")
-        embedding = F.normalize(embedding, p=2, dim=1)
+        input = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt")
+        with torch.no_grad():
+            output = self.encoder(**input)
+            embedding = output.last_hidden_state[:, 0]  # CLS token
+            embedding = F.normalize(embedding, p=2, dim=1)
 
         return embedding
 
