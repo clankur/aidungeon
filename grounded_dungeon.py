@@ -9,27 +9,6 @@ import torch.nn.functional as F
 
 
 # %%
-def cosine_similarity(vec_a: torch.Tensor, vec_b: torch.Tensor) -> float:
-    """
-    Calculate the cosine similarity between two vectors.
-
-    Args:
-        vec_a: First vector
-        vec_b: Second vector
-
-    Returns:
-        float: Cosine similarity between the two vectors
-    """
-    dot_product = torch.dot(vec_a, vec_b)
-    magnitude_a = torch.norm(vec_a)
-    magnitude_b = torch.norm(vec_b)
-
-    if magnitude_a == 0 or magnitude_b == 0:
-        return 0.0
-
-    return dot_product / (magnitude_a * magnitude_b)
-
-
 def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
     """softmax with 0 logit padding, drop logits that have negative alignment"""
     # Create a tensor of zeros with the same shape as the max_logits
@@ -88,7 +67,6 @@ class Retriever:
         return embedding
 
     def retrieve(self, query: str, threshold: float = 0.75) -> List[str]:
-        retrieved_edges = []
         query_embedding = self.encode_text(query)
         relevant_entities = self.get_relevant_entities(query)
         if not relevant_entities:
@@ -116,16 +94,25 @@ class Retriever:
 
         scores = quiet_softmax(logits)
         scores = einops.rearrange(scores, "1 n_edges -> n_edges")
-        scores = scores.tolist()
 
-        # sort relationships by scores
-        sorted_relationships = [
-            (score, relationship)
-            for score, relationship in sorted(
-                zip(scores, relationships), key=lambda x: -x[0]
-            )
+        sorted_indices = torch.argsort(scores, descending=True)
+        sorted_scores = scores[sorted_indices]
+        cumulative_scores = torch.cumsum(sorted_scores, dim=0)
+        mask = cumulative_scores <= threshold
+
+        # Add one more element after threshold is reached
+        if torch.any(~mask):
+            first_false_idx = torch.where(~mask)[0][0]
+            if first_false_idx > 0:  # Ensure we don't go out of bounds
+                mask[first_false_idx] = True
+
+        selected_indices = sorted_indices[mask]
+
+        retrieved_edges = [
+            (relationships[idx.item()], scores[idx].item()) for idx in selected_indices
         ]
-        return sorted_relationships
+
+        return retrieved_edges
 
 
 #
@@ -142,12 +129,16 @@ edges = [
     ("Bob", "spouse", "Jessica"),
     ("Bob", "torso", "Shirt'"),
     ("Bob", "waist", "Pants"),
+    ("Bob", "enemy", "Steve"),
     ("Jessica", "pet", "Doug"),
     ("Jessica", "pet", "Kate"),
     ("Jessica", "spouse", "Bob"),
     ("Jessica", "head", "Hat"),
     ("Jessica", "torso", "Shirt"),
     ("Jessica", "waist", "Pants"),
+    ("Jessica", "enemy", "Steve"),
+    ("Steve", "enemy", "Bob"),
+    ("Steve", "enemy", "Jessica"),
 ]
 
 kg = KnowledgeGraph.build_graph(edges)
@@ -171,12 +162,13 @@ retriever.retrieve("Jessica is Bob's what?")
 # %%
 retriever.retrieve("What is Jessica wearing?")
 
+# %%
+retriever.retrieve("Who is Bob's enemy?")
+
+# %%
+retriever.retrieve("Who is Steve's enemy?")
 
 # alternate retrieval approaches
 #   cross attend between edges and the query and select the edges with High Scores (?)
 #   leverage graph spatial structure (?), use GNN (???)
-
-# We might want to not use all edges for logits
-# instead we retrieve edges with entities relevant (?) to query
-# use like Entity Extraction to get them and then filter upon those edges?
 # %%
