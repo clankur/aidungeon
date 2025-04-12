@@ -5,6 +5,7 @@ import torch
 from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
 from sentence_transformers import SentenceTransformer
+import torch.nn.functional as F
 
 
 # %%
@@ -52,6 +53,10 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
         model_name = "sentence-transformers/all-MiniLM-L6-v2"
+        # other model choices
+        # FacebookAI/xlm-roberta-large
+        # OpenMatch/cocodr-base-msmarco => good retrievers
+        # answerdotai/ModernBERT-base
         self.graph = graph
         self.encoder = SentenceTransformer(model_name)
 
@@ -77,7 +82,9 @@ class Retriever:
             torch.Tensor: The embedding vector
         """
         embedding = self.encoder.encode(text, convert_to_tensor=True)
-        embedding = einops.rearrange(embedding, "d -> 1 d")
+        embedding = einops.rearrange(embedding, "C -> 1 C")
+        embedding = F.normalize(embedding, p=2, dim=1)
+
         return embedding
 
     def retrieve(self, query: str, threshold: float = 0.75) -> List[str]:
@@ -104,14 +111,28 @@ class Retriever:
         logits = einops.einsum(
             query_embedding,
             relationship_embeddings,
-            "Q_len D, n_edges D -> Q_len n_edges",
+            "Q_len C, n_edges C -> Q_len n_edges",
         )
 
         scores = quiet_softmax(logits)
-        print(scores)
-        print(relationships)
+        scores = einops.rearrange(scores, "1 n_edges -> n_edges")
+        scores = scores.tolist()
 
-        return retrieved_edges
+        # sort relationships by scores
+        sorted_relationships = [
+            (score, relationship)
+            for score, relationship in sorted(
+                zip(scores, relationships), key=lambda x: -x[0]
+            )
+        ]
+        return sorted_relationships
+
+
+#
+# use prompt to figure out what is the best statement to add
+#   4 potential statements you can add, you argmax to select the best statement
+#   with new queries get probabilities
+# what pairs of things need new entries, and add their relationship, add it
 
 
 # %%
@@ -148,7 +169,7 @@ retriever.retrieve("Who is Bob's spouse?")
 retriever.retrieve("Jessica is Bob's what?")
 
 # %%
-retriever.retrieve("What is Jessica equipped?")
+retriever.retrieve("What is Jessica wearing?")
 
 
 # alternate retrieval approaches
