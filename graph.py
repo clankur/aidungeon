@@ -11,7 +11,7 @@ class KnowledgeGraph:
 
     @typechecked
     def add_entity(self, name: str) -> None:
-        self.graph[name] = {"name": name}
+        self.graph[name] = {}
 
     @typechecked
     def add_edge(self, subject: str, relationship: str, object: str) -> None:
