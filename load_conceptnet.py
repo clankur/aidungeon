@@ -41,11 +41,6 @@ def load_conceptnet_csv(file_path: str) -> Graph:
             reader = csv.reader(f, delimiter="\t", quoting=csv.QUOTE_NONE)
             for i, row in enumerate(reader):
                 lines_processed = i + 1
-                if lines_processed % 5000000 == 0:  # Print progress less often
-                    print(
-                        f"Processed {lines_processed // 1000000}M lines, added {nodes_added}"
-                    )
-
                 if len(row) == 5:
                     # Fields: edge_uri, relation, start_node, end_node, metadata_json
                     _, rel, start, end, _ = row
@@ -119,30 +114,22 @@ if __name__ == "__main__":
     g = load_conceptnet_csv(en_conceptnet_path)
     print(f"Total triples in graph: {len(g)}")
     # %%
-    query_uri = term.URIRef("/c/en/karate/n")
-    query_string_props = f"""
-            SELECT ?p ?o
-            WHERE {{
-            <{query_uri}> ?p ?o .
-        }}
-    """
-    results_props = g.query(query_string_props)
-    for row in results_props:
-        print(row)
+    from importlib import reload
+    import retriever
 
     # %%
-    g.all_nodes()
+    reload(retriever)
+    from retriever import Retriever, KnowledgeGraph
 
     # %%
-    query_uri = term.URIRef("/c/en/obama")
-    query_string_props = f"""
-            SELECT ?p ?o
-            WHERE {{
-            <{query_uri}> ?p ?o .
-        }}
-    """
-    results_props = g.query(query_string_props)
-    for row in results_props:
-        print(row)
+    r = Retriever(g)
+    r.retrieve("Who is Obama?")
+    # %%
+    r.retrieve("What is the capital of the United States?")
 
     # %%
+    r.retrieve("Where is George Bush?")
+    # %%
+    r.retrieve("Where is Mount Everest?")
+
+# %%
