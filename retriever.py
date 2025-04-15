@@ -8,6 +8,42 @@ from sentence_transformers import SentenceTransformer
 import torch.nn.functional as F
 from typing import Tuple
 
+# %%
+RELATIONSHIP_MAP = {
+    "Antonym": "is the opposite of",
+    "AtLocation": "is located at",
+    "CapableOf": "is capable of",
+    "Causes": "causes",
+    "CausesDesire": "makes someone want to",
+    "CreatedBy": "is created by",
+    "DefinedAs": "is defined as",
+    "DerivedFrom": "is derived from",
+    "Desires": "wants",
+    "DistinctFrom": "is distinct from",
+    "Entails": "entails",
+    "EtymologicallyDerivedFrom": "comes etymologically from",
+    "EtymologicallyRelatedTo": "is etymologically related to",
+    "FormOf": "is a form of",
+    "HasA": "has a",
+    "HasContext": "is used in the context of",
+    "HasProperty": "has the property of",
+    "InstanceOf": "is an instance of",
+    "IsA": "is a",
+    "LocatedNear": "is located near",
+    "MadeOf": "is made of",
+    "MannerOf": "is a manner of",
+    "MotivatedByGoal": "is motivated by the goal of",
+    "NotCapableOf": "is not capable of",
+    "NotDesires": "does not desire",
+    "NotHasProperty": "does not have the property of",
+    "PartOf": "is part of",
+    "RelatedTo": "is related to",
+    "SimilarTo": "is similar to",
+    "SymbolOf": "is a symbol of",
+    "Synonym": "is a synonym of",
+    "UsedFor": "is used for",
+}
+
 
 # %%
 def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
@@ -37,6 +73,7 @@ def get_en_pred_obj(pred_obj: Tuple[str, str]) -> str:
     pred_uri, obj_uri = pred_obj
 
     pred_name = str(pred_uri).split("/")[-1]
+    pred_name = RELATIONSHIP_MAP.get(pred_name, pred_name)
     obj_name = str(obj_uri).replace("/c/en/", "").replace("_", " ")
 
     return f"{pred_name} {obj_name}"
