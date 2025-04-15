@@ -99,9 +99,14 @@ def clean_conceptnet_graph(
 
 # %%
 if __name__ == "__main__":
+    conceptnet_url = "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz"
     conceptnet_path = "data/conceptnet-assertions-5.7.0.csv.gz"
     en_conceptnet_path = "data/conceptnet-assertions-5.7.0-en.csv"
     # %%
+    if not os.path.exists(conceptnet_path):
+        print(f"Downloading ConceptNet from {conceptnet_url}...")
+        os.system(f"wget {conceptnet_url} -O {conceptnet_path}")
+
     if not os.path.exists(en_conceptnet_path):
         clean_conceptnet_graph(
             conceptnet_path,
@@ -123,7 +128,6 @@ if __name__ == "__main__":
 
     # %%
     r = Retriever(g)
-    r.retrieve("Who is Obama?")
     # %%
     r.retrieve("What is the capital of the United States?")
 
@@ -131,5 +135,13 @@ if __name__ == "__main__":
     r.retrieve("Where is George Bush?")
     # %%
     r.retrieve("Where is Mount Everest?")
+    # %%
+    r.retrieve("What does Apple do?")
+    # %%
+    r.retrieve("What does Windows do?")
+    # %%
+    r.retrieve("Should I add Windows to my house?")
+    # %%
+    r.retrieve("What is a Macintosh?")
 
 # %%
