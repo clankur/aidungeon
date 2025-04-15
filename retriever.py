@@ -41,14 +41,37 @@ class Retriever:
 
         ner_model_name = "dslim/bert-base-NER"
         self.ner_model = pipeline("ner", model=ner_model_name)
+        print("done")
 
     def get_relevant_entities(self, query: str) -> List[str]:
         ner_results = self.ner_model(query)
-        return [
-            result["word"]
-            for result in ner_results
-            if result["word"] in self.graph.graph
-        ]
+        print(ner_results)
+
+        entities = []
+        current = ""
+
+        for r in ner_results:
+            tag = r["entity"]
+            word = r["word"]
+
+            if tag.startswith("B-"):
+                if current:
+                    entities.append(current.strip())
+                current = word if not word.startswith("##") else word[2:]
+            elif tag.startswith("I-"):
+                if word.startswith("##"):
+                    current += word[2:]
+                else:
+                    current += " " + word
+            else:
+                if current:
+                    entities.append(current.strip())
+                    current = ""
+
+        if current:
+            entities.append(current.strip())
+
+        return [e for e in entities if e in self.graph.graph]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
@@ -74,6 +97,8 @@ class Retriever:
         # convert graph to n_edges x C tensor
         triples = []
         relationships = []
+
+        # TODO: adjust so encodings done in parallel
         for entity in relevant_entities:
             for relationship in self.graph.graph[entity]:
                 triple = (
@@ -123,52 +148,52 @@ class Retriever:
 
 
 # %%
-edges = [
-    ("Bob", "pet", "Jason"),
-    ("Bob", "pet", "Carl"),
-    ("Bob", "spouse", "Jessica"),
-    ("Bob", "torso", "Shirt'"),
-    ("Bob", "waist", "Pants"),
-    ("Bob", "enemy", "Steve"),
-    ("Jessica", "pet", "Doug"),
-    ("Jessica", "pet", "Kate"),
-    ("Jessica", "spouse", "Bob"),
-    ("Jessica", "head", "Hat"),
-    ("Jessica", "torso", "Shirt"),
-    ("Jessica", "waist", "Pants"),
-    ("Jessica", "enemy", "Steve"),
-    ("Steve", "enemy", "Bob"),
-    ("Steve", "enemy", "Jessica"),
-]
+if __name__ == "__main__":
+    edges = [
+        ("Bob", "pet", "Jason"),
+        ("Bob", "pet", "Carl"),
+        ("Bob", "spouse", "Jessica"),
+        ("Bob", "torso", "Shirt'"),
+        ("Bob", "waist", "Pants"),
+        ("Bob", "enemy", "Steve"),
+        ("Jessica", "pet", "Doug"),
+        ("Jessica", "pet", "Kate"),
+        ("Jessica", "spouse", "Bob"),
+        ("Jessica", "head", "Hat"),
+        ("Jessica", "torso", "Shirt"),
+        ("Jessica", "waist", "Pants"),
+        ("Jessica", "enemy", "Steve"),
+        ("Steve", "enemy", "Bob"),
+        ("Steve", "enemy", "Jessica"),
+    ]
 
-kg = KnowledgeGraph.build_graph(edges)
-print(kg.graph)
+    kg = KnowledgeGraph.build_graph(edges)
+    print(kg.graph)
 
+    retriever = Retriever(kg)
+    retriever.retrieve("Who is Bob's dog?")
 
-retriever = Retriever(kg)
-retriever.retrieve("Who is Bob's dog?")
+    # %%
+    retriever.retrieve("Jessica loves dogs")
 
-# %%
-retriever.retrieve("Jessica loves dogs")
+    # %%
+    retriever.retrieve("What is Bob wearing?")
+    # %%
+    retriever.retrieve("Who is Bob's spouse?")
 
-# %%
-retriever.retrieve("What is Bob wearing?")
-# %%
-retriever.retrieve("Who is Bob's spouse?")
+    # %%
+    retriever.retrieve("Jessica is Bob's what?")
 
-# %%
-retriever.retrieve("Jessica is Bob's what?")
+    # %%
+    retriever.retrieve("What is Jessica wearing?")
 
-# %%
-retriever.retrieve("What is Jessica wearing?")
+    # %%
+    retriever.retrieve("Who is Bob's enemy?")
 
-# %%
-retriever.retrieve("Who is Bob's enemy?")
+    # %%
+    retriever.retrieve("Who is Steve's enemy?")
 
-# %%
-retriever.retrieve("Who is Steve's enemy?")
-
-# alternate retrieval approaches
-#   cross attend between edges and the query and select the edges with High Scores (?)
-#   leverage graph spatial structure (?), use GNN (???)
-# %%
+    # alternate retrieval approaches
+    #   cross attend between edges and the query and select the edges with High Scores (?)
+    #   leverage graph spatial structure (?), use GNN (???)
+    # %%
