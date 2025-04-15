@@ -1,5 +1,6 @@
 # %%
-from rdflib import Graph, URIRef
+from rdflib import Graph
+from graph import KnowledgeGraph
 from typing import List
 import torch
 from transformers import AutoTokenizer, AutoModel, pipeline
@@ -77,30 +78,6 @@ def get_en_pred_obj(pred_obj: Tuple[str, str]) -> str:
     obj_name = str(obj_uri).replace("/c/en/", "").replace("_", " ")
 
     return f"{pred_name} {obj_name}"
-
-
-# %%
-class KnowledgeGraph:
-    def __init__(self, graph: Graph) -> None:
-        self.graph = graph
-
-    def query(self, query: str) -> List[str]:
-        query = query.replace(" ", "_").lower()
-        query_uri = URIRef(f"/c/en/{query}")
-        query_string_props = f"""
-            SELECT ?p ?o
-            WHERE {{
-            <{query_uri}> ?p ?o .
-        }}
-    """
-        return self.graph.query(query_string_props)
-
-    def contains(self, query: str) -> bool:
-        query = query.replace(" ", "_").lower()
-        query_uri = URIRef(f"/c/en/{query}")
-        ask_query = f"ASK {{ <{query_uri}> ?p ?o . }}"
-        results = self.graph.query(ask_query)
-        return bool(results)
 
 
 # %%

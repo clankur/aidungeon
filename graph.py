@@ -1,38 +1,36 @@
 # %%
+from rdflib import Graph, URIRef
 from collections import defaultdict
 from typing import List, Tuple
 from typeguard import typechecked
 import uuid
 
 
+# %%
 class KnowledgeGraph:
-    def __init__(self) -> None:
-        self.graph = {}
+    def __init__(self, graph: Graph) -> None:
+        self.graph = graph
 
-    @typechecked
-    def add_entity(self, name: str) -> None:
-        self.graph[name] = {}
+    def query(self, query: str) -> List[str]:
+        query = query.replace(" ", "_").lower()
+        query_uri = URIRef(f"/c/en/{query}")
+        query_string_props = f"""
+            SELECT ?p ?o
+            WHERE {{
+            <{query_uri}> ?p ?o .
+        }}
+        """
+        return self.graph.query(query_string_props)
 
-    @typechecked
-    def add_edge(self, subject: str, relationship: str, object: str) -> None:
-        if subject not in self.graph:
-            self.add_entity(subject)
-        if object not in self.graph:
-            self.add_entity(object)
-        self.graph[subject][relationship] = object
-
-    @typechecked
-    @staticmethod
-    def build_graph(triples: List[Tuple[str, str, str]]) -> "KnowledgeGraph":
-        kg = KnowledgeGraph()
-        for subject, relationship, obj in triples:
-            kg.add_edge(subject, relationship, obj)
-        return kg
+    def contains(self, query: str) -> bool:
+        query = query.replace(" ", "_").lower()
+        query_uri = URIRef(f"/c/en/{query}")
+        ask_query = f"ASK {{ <{query_uri}> ?p ?o . }}"
+        results = self.graph.query(ask_query)
+        return bool(results)
 
 
 # %%
-
-
 # Q/A
 # how do we seperate shared entity names
 #   Solution: use object ids when adding edges
