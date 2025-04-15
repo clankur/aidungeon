@@ -96,6 +96,23 @@ for uri_tuple in found_uris:
         f"\tFound {len(query_results)} outgoing properties/objects for {subject_uri}:"
     )
     for row in query_results:
-        print(f"\t\t{row.p} -> {row.o}")
+        predicate_uri = row.p
+        object_val = row.o
+
+        # Look up the label for the predicate URI
+        # g.label() searches for skos:prefLabel and rdfs:label
+        predicate_label = g.label(predicate_uri)
+
+        # Use the label if found, otherwise default to the URI string
+        predicate_display = predicate_label if predicate_label else str(predicate_uri)
+
+        # Also try to get label for the object if it's a URI
+        object_display = object_val
+        if isinstance(object_val, term.URIRef):
+            object_label = g.label(object_val)
+            if object_label:
+                object_display = object_label  # Optionally add URI in parens: f"{object_label} ({object_val})"
+
+        print(f"\t\t{predicate_display} -> {object_display}")
 
 # %%
