@@ -1,11 +1,12 @@
 # %%
-from graph import KnowledgeGraph
+from rdflib import Graph, URIRef
 from typing import List
 import torch
 from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
 from sentence_transformers import SentenceTransformer
 import torch.nn.functional as F
+from typing import Tuple
 
 
 # %%
@@ -28,6 +29,43 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
     return probs
 
 
+def get_en_pred_obj(pred_obj: Tuple[str, str]) -> str:
+    """
+    converts a tuple of (pred_obj, score) to a string of the form. ie).
+    (/r/IsA, /c/en/president_of_united_states) -> "IsA president of united states"
+    """
+    pred_uri, obj_uri = pred_obj
+
+    pred_name = str(pred_uri).split("/")[-1]
+    obj_name = str(obj_uri).replace("/c/en/", "").replace("_", " ")
+
+    return f"{pred_name} {obj_name}"
+
+
+# %%
+class KnowledgeGraph:
+    def __init__(self, graph: Graph) -> None:
+        self.graph = graph
+
+    def query(self, query: str) -> List[str]:
+        query = query.replace(" ", "_").lower()
+        query_uri = URIRef(f"/c/en/{query}")
+        query_string_props = f"""
+            SELECT ?p ?o
+            WHERE {{
+            <{query_uri}> ?p ?o .
+        }}
+    """
+        return self.graph.query(query_string_props)
+
+    def contains(self, query: str) -> bool:
+        query = query.replace(" ", "_").lower()
+        query_uri = URIRef(f"/c/en/{query}")
+        ask_query = f"ASK {{ <{query_uri}> ?p ?o . }}"
+        results = self.graph.query(ask_query)
+        return bool(results)
+
+
 # %%
 class Retriever:
     def __init__(self, graph: KnowledgeGraph) -> None:
@@ -36,7 +74,8 @@ class Retriever:
         # FacebookAI/xlm-roberta-large
         # OpenMatch/cocodr-base-msmarco => good retrievers
         # answerdotai/ModernBERT-base
-        self.graph = graph
+        self.graph = KnowledgeGraph(graph)
+
         self.encoder = AutoModel.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -45,11 +84,32 @@ class Retriever:
 
     def get_relevant_entities(self, query: str) -> List[str]:
         ner_results = self.ner_model(query)
-        return [
-            result["word"]
-            for result in ner_results
-            if result["word"] in self.graph.graph
-        ]
+
+        entities = []
+        current = ""
+        for r in ner_results:
+            tag = r["entity"]
+            word = r["word"]
+
+            if tag.startswith("B-"):
+                if current:
+                    entities.append(current.strip())
+                current = word if not word.startswith("##") else word[2:]
+            elif tag.startswith("I-"):
+                if word.startswith("##"):
+                    current += word[2:]
+                else:
+                    current += " " + word
+            else:
+                if current:
+                    entities.append(current.strip())
+                    current = ""
+
+        if current:
+            entities.append(current.strip())
+
+        print(f"{entities=}")
+        return [e for e in entities if self.graph.contains(e)]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
@@ -77,11 +137,12 @@ class Retriever:
         # convert graph to n_edges x C tensor
         triples = []
         relationships = []
+
+        # TODO: adjust so encodings done in parallel
         for entity in relevant_entities:
-            for relationship in self.graph.graph[entity]:
-                triple = (
-                    f"{entity} {relationship} {self.graph.graph[entity][relationship]}"
-                )
+            for predicate, object in self.graph.query(entity):
+                pred_obj = get_en_pred_obj((predicate, object))
+                triple = f"{entity} {pred_obj}"
                 relationships.append(triple)
                 triple_embedding = self.encode_text(triple)
                 triple_embedding = einops.rearrange(triple_embedding, "b d -> (b d)")
@@ -123,55 +184,3 @@ class Retriever:
 #   4 potential statements you can add, you argmax to select the best statement
 #   with new queries get probabilities
 # what pairs of things need new entries, and add their relationship, add it
-
-
-# %%
-edges = [
-    ("Bob", "pet", "Jason"),
-    ("Bob", "pet", "Carl"),
-    ("Bob", "spouse", "Jessica"),
-    ("Bob", "torso", "Shirt'"),
-    ("Bob", "waist", "Pants"),
-    ("Bob", "enemy", "Steve"),
-    ("Jessica", "pet", "Doug"),
-    ("Jessica", "pet", "Kate"),
-    ("Jessica", "spouse", "Bob"),
-    ("Jessica", "head", "Hat"),
-    ("Jessica", "torso", "Shirt"),
-    ("Jessica", "waist", "Pants"),
-    ("Jessica", "enemy", "Steve"),
-    ("Steve", "enemy", "Bob"),
-    ("Steve", "enemy", "Jessica"),
-]
-
-kg = KnowledgeGraph.build_graph(edges)
-print(kg.graph)
-
-
-retriever = Retriever(kg)
-retriever.retrieve("Who is Bob's dog?")
-
-# %%
-retriever.retrieve("Jessica loves dogs")
-
-# %%
-retriever.retrieve("What is Bob wearing?")
-# %%
-retriever.retrieve("Who is Bob's spouse?")
-
-# %%
-retriever.retrieve("Jessica is Bob's what?")
-
-# %%
-retriever.retrieve("What is Jessica wearing?")
-
-# %%
-retriever.retrieve("Who is Bob's enemy?")
-
-# %%
-retriever.retrieve("Who is Steve's enemy?")
-
-# alternate retrieval approaches
-#   cross attend between edges and the query and select the edges with High Scores (?)
-#   leverage graph spatial structure (?), use GNN (???)
-# %%
