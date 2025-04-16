@@ -1,5 +1,4 @@
 # %%
-from rdflib import Graph
 from graph import KnowledgeGraph
 from typing import List
 import torch
@@ -82,19 +81,18 @@ def get_en_pred_obj(pred_obj: Tuple[str, str]) -> str:
 
 # %%
 class Retriever:
-    def __init__(self, graph: Graph) -> None:
+    def __init__(self) -> None:
         model_name = "sentence-transformers/all-MiniLM-L6-v2"
         # other model choices
         # FacebookAI/xlm-roberta-large
         # OpenMatch/cocodr-base-msmarco => good retrievers
         # answerdotai/ModernBERT-base
-        self.graph = KnowledgeGraph(graph)
         self.encoder = SentenceTransformer(model_name)
 
         ner_model_name = "dslim/bert-base-NER"
         self.ner_model = pipeline("ner", model=ner_model_name)
 
-    def get_relevant_entities(self, query: str) -> List[str]:
+    def get_relevant_entities(self, query: str, graph: KnowledgeGraph) -> List[str]:
         ner_results = self.ner_model(query)
 
         entities = []
@@ -121,7 +119,7 @@ class Retriever:
             entities.append(current.strip())
 
         print(f"{entities=}")
-        return [e for e in entities if self.graph.contains(e)]
+        return [e for e in entities if graph.contains(e)]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
@@ -139,9 +137,11 @@ class Retriever:
 
         return embedding
 
-    def retrieve(self, query: str, threshold: float = 0.75) -> List[str]:
+    def retrieve(
+        self, query: str, graph: KnowledgeGraph, threshold: float = 0.75
+    ) -> List[str]:
         query_embedding = self.encode_text(query)
-        relevant_entities = self.get_relevant_entities(query)
+        relevant_entities = self.get_relevant_entities(query, graph)
         if not relevant_entities:
             raise ValueError("No relevant entities found in the graph")
         # convert graph to n_edges x C tensor
@@ -150,7 +150,7 @@ class Retriever:
 
         # TODO: adjust so encodings done in parallel
         for entity in relevant_entities:
-            for predicate, object in self.graph.query(entity):
+            for predicate, object in graph.query(entity):
                 pred_obj = get_en_pred_obj((predicate, object))
                 triple = f"{entity} {pred_obj}"
                 relationships.append(triple)

@@ -1,5 +1,5 @@
 # %%
-from rdflib import Graph, term, URIRef
+from rdflib import Graph, URIRef
 import csv
 import os
 
