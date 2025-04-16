@@ -2,3 +2,4 @@ typeguard
 nltk
 google-generativeai
 einops
+rdflib
