@@ -1,4 +1,5 @@
 # %%
+import re
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from graph import KnowledgeGraph
 from retriever import Retriever
@@ -6,79 +7,56 @@ from google import genai
 from google.genai import types
 from typeguard import typechecked
 from typing import Dict
+import ast
 
 
 # %%
 class Extractor:
     def __init__(self) -> None:
-        self.triplet_extractor = pipeline(
-            "text2text-generation",
-            model="Babelscape/rebel-large",
-            tokenizer="Babelscape/rebel-large",
-        )
+        self.extractor = genai.Client()
 
     def extract(self, text: str) -> list[Dict[str, str]]:
-        text = self.triplet_extractor.tokenizer.batch_decode(
-            [
-                self.triplet_extractor(
-                    text,
-                    return_tensors=True,
-                    return_text=False,
-                )[
-                    0
-                ]["generated_token_ids"]
-            ]
-        )[0]
+        prompt = f"""
+            From the following text, extract all subject-predicate-object triples.
+            Identify any pronouns and replace them with the proper noun they refer to, if it is clearly identifiable within the text.
+            Return the extracted triples as a Python list of tuples, where each tuple is in the format: (subject, predicate, object) 
+            ensuring there is Subject, Predicate and Object. Return only the list so that it can be processed by ast.literal_eval with no markdown formatting.
 
-        triplets = []
-        relation, subject, relation, object_ = "", "", "", ""
-        text = text.strip()
-        current = "x"
-        for token in (
-            text.replace("<s>", "").replace("<pad>", "").replace("</s>", "").split()
-        ):
-            if token == "<triplet>":
-                current = "t"
-                if relation != "":
-                    triplets.append(
-                        {
-                            "head": subject.strip(),
-                            "type": relation.strip(),
-                            "tail": object_.strip(),
-                        }
-                    )
-                    relation = ""
-                subject = ""
-            elif token == "<subj>":
-                current = "s"
-                if relation != "":
-                    triplets.append(
-                        {
-                            "head": subject.strip(),
-                            "type": relation.strip(),
-                            "tail": object_.strip(),
-                        }
-                    )
-                object_ = ""
-            elif token == "<obj>":
-                current = "o"
-                relation = ""
-            else:
-                if current == "t":
-                    subject += " " + token
-                elif current == "s":
-                    object_ += " " + token
-                elif current == "o":
-                    relation += " " + token
-        if subject != "" and relation != "" and object_ != "":
-            triplets.append(
-                {
-                    "head": subject.strip(),
-                    "type": relation.strip(),
-                    "tail": object_.strip(),
-                }
-            )
-        return triplets
+            Example 1:
+            Text: "Alice loves Bob. She admires him greatly."
+            Response: [("Alice", "loves", "Bob"), ("Alice", "admires greatly", "Bob")]
+
+            Example 2:
+            Text: "The cat sat on the mat. It looked comfortable."
+            Response: [("cat", "sat on", "mat"), ("cat", "looked comfortable", None)] 
+
+            Example 3:
+            Text: "John went to the store. He bought milk."
+            Response: [("John", "went to", "store"), ("John", "bought", "milk")]
+
+            Text: '{text}'
+            Response:
+        """
+
+        response = self.extractor.models.generate_content(
+            model="gemini-2.0-flash-001", contents=prompt
+        )
+        print(response.text)
+        # Use regex to find the list within the response text, handling potential markdown fences
+        match = re.search(r"\[.*?\]", response.text, re.DOTALL)
+        if match:
+            response_text = match.group(0)
+            return ast.literal_eval(response_text)
+        else:
+            # Handle cases where the list format might be unexpected or not found
+            print("Warning: Could not find a list in the response.")
+            # Attempt to strip and parse anyway, or return an empty list/raise error
+            try:
+                response_text = response.text.strip().strip("```", "```")
+                return ast.literal_eval(response_text)
+            except (SyntaxError, ValueError):
+                print("Error: Failed to parse the response text as a list.")
+                return []  # Return an empty list as a fallback
 
 
 class Storyteller:
@@ -122,7 +100,6 @@ class Storyteller:
         """
         triples = self.extractor.extract(text)
         print(triples)
-        # convert response.text into a new subject relationship object in graph
 
         return text
 
