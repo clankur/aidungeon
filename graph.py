@@ -1,5 +1,5 @@
 # %%
-from rdflib import Graph, URIRef
+import networkx as nx
 from collections import defaultdict
 from typing import List, Tuple
 from typeguard import typechecked
@@ -8,26 +8,29 @@ import uuid
 
 # %%
 class KnowledgeGraph:
-    def __init__(self, graph: Graph) -> None:
+    def __init__(self, graph: nx.MultiDiGraph) -> None:
         self.graph = graph
 
-    def query(self, query: str) -> List[str]:
-        query = query.replace(" ", "_").lower()
-        query_uri = URIRef(f"/c/en/{query}")
-        query_string_props = f"""
-            SELECT ?p ?o
-            WHERE {{
-            <{query_uri}> ?p ?o .
-        }}
-        """
-        return self.graph.query(query_string_props)
+    def query(self, query: str) -> List[Tuple[str, str]]:
+        """Queries the graph for outgoing relationships from a given node."""
+        node_name = query.replace(" ", "_").lower()
+        results = []
+        if self.graph.has_node(node_name):
+            # Iterate through outgoing edges (u, v, data)
+            # Assumes relationship type is stored in the 'relation' attribute of the edge data
+            for _u, v, data in self.graph.out_edges(node_name, data=True):
+                relation = data.get(
+                    "relation", "related_to"
+                )  # Default if 'relation' attr is missing
+                results.append((relation, v))
+        return results
 
     def contains(self, query: str) -> bool:
-        query = query.replace(" ", "_").lower()
-        query_uri = URIRef(f"/c/en/{query}")
-        ask_query = f"ASK {{ <{query_uri}> ?p ?o . }}"
-        results = self.graph.query(ask_query)
-        return bool(results)
+        """Checks if a node exists in the graph."""
+        node_name = query.replace(" ", "_").lower()
+        print(f"{node_name=}")
+        # Use networkx's has_node method
+        return self.graph.has_node(node_name)
 
 
 # %%

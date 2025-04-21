@@ -1,33 +1,37 @@
 # %%
-from rdflib import Graph, URIRef
 import csv
 import os
+import networkx as nx
+import re
+
+
+# Helper function to extract node/relation name from ConceptNet URI
+def _extract_name_from_uri(uri: str) -> str:
+    """Extracts the name part from a ConceptNet URI like /c/en/my_node -> my_node"""
+    match = re.match(r"/[rc]/[^/]+/([^/]+)", uri)
+    if match:
+        return match.group(1)
+    return uri
 
 
 # %%
-def load_conceptnet_csv(file_path: str) -> Graph:
+def load_conceptnet_csv(file_path: str) -> nx.MultiDiGraph:
     """
-    Loads ConceptNet edges from a CSV file into an rdflib Graph,
-    filtering for edges where both subject and object nodes belong to the specified language.
+    Loads ConceptNet edges from a CSV file into a networkx MultiDiGraph.
 
     The CSV file format is expected to be tab-separated with five fields per line:
     edge_uri, relation, start_node, end_node, metadata_json
 
-    Example line:
-    /a/[/r/Antonym/,/c/ab/агыруа/n/,/c/ab/аҧсуа/]   /r/Antonym      /c/ab/агыруа/n  /c/ab/аҧсуа     {"dataset": "/d/wiktionary/en", ...}
+    Nodes are represented as strings (extracted from ConceptNet URIs),
+    and edges are added with the relationship type stored in the 'relation' attribute.
 
     Args:
         file_path: Path to the ConceptNet CSV file (can be gzipped).
-        language_code: The 2-letter language code (e.g., "en") to filter nodes by.
-                       Only edges where both start and end nodes match `/c/{language_code}/`
-                       will be included.
 
     Returns:
-        An rdflib Graph containing the filtered triples.
+        A networkx MultiDiGraph containing the ConceptNet data.
     """
-    g = Graph()
-    nodes_added = 0
-    lines_processed = 0
+    g = nx.MultiDiGraph()
 
     try:
         # Handle potential gzipped files transparently
@@ -45,18 +49,20 @@ def load_conceptnet_csv(file_path: str) -> Graph:
                     # Fields: edge_uri, relation, start_node, end_node, metadata_json
                     _, rel, start, end, _ = row
 
-                    # Convert ConceptNet URIs to rdflib URIRefs
-                    subject = URIRef(start)
-                    predicate = URIRef(rel)
-                    obj = URIRef(end)
-                    g.add((subject, predicate, obj))
-                    nodes_added += 1
+                    # Extract clean names for nodes and relation
+                    subject_name = _extract_name_from_uri(start)
+                    relation_name = _extract_name_from_uri(rel)
+                    object_name = _extract_name_from_uri(end)
+
+                    # Add edge to the MultiDiGraph
+                    # Nodes are added implicitly if they don't exist
+                    g.add_edge(subject_name, object_name, relation=relation_name)
 
     except FileNotFoundError:
         print(f"Error: File not found at {file_path}")
 
     print(
-        f"Finished loading. Processed {lines_processed} lines, added {nodes_added} triples."
+        f"Finished loading. Processed {lines_processed} lines, added {g.number_of_edges()} edges."
     )
     return g
 
@@ -116,32 +122,49 @@ if __name__ == "__main__":
 
     # %%
     # Load only English-to-English edges
-    g = load_conceptnet_csv(en_conceptnet_path)
-    print(f"Total triples in graph: {len(g)}")
+    graphml_path = "data/conceptnet-en.graphml"
+    if not os.path.exists(graphml_path):
+        print(f"Loading ConceptNet from {en_conceptnet_path}...")
+        g = load_conceptnet_csv(en_conceptnet_path)
+        try:
+            nx.write_graphml(g, graphml_path)
+            print(f"Graph saved to {graphml_path}")
+        except Exception as e:
+            print(f"Error saving graph to GraphML: {e}")
+    else:
+        print(f"Loading ConceptNet from {graphml_path}...")
+        g = nx.read_graphml(graphml_path)
+    print(
+        f"Graph loaded with {g.number_of_nodes()} nodes and {g.number_of_edges()} edges."
+    )
     # %%
     from importlib import reload
     import retriever
+    import graph
 
     # %%
     reload(retriever)
-    from retriever import Retriever, KnowledgeGraph
+    reload(graph)
+    from graph import KnowledgeGraph
+    from retriever import Retriever
 
     # %%
-    r = Retriever(g)
+    kg = KnowledgeGraph(g)
+    r = Retriever()
     # %%
-    r.retrieve("What is the capital of the United States?")
+    r.retrieve("What is the capital of the United States of America?", kg)
 
     # %%
-    r.retrieve("Where is George Bush?")
+    r.retrieve("Where is George Bush?", kg)
     # %%
-    r.retrieve("Where is Mount Everest?")
+    r.retrieve("Where is Mount Everest?", kg)
     # %%
-    r.retrieve("What does Apple do?")
+    r.retrieve("What does Apple do?", kg)
     # %%
-    r.retrieve("What does Windows do?")
+    r.retrieve("What does Windows do?", kg)
+    # %%gggggg
+    r.retrieve("Should I add Windows to my house?", kg)
     # %%
-    r.retrieve("Should I add Windows to my house?")
-    # %%
-    r.retrieve("What is a Macintosh?")
+    r.retrieve("What is a Macintosh?", kg)
 
 # %%
