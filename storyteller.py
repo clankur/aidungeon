@@ -8,38 +8,58 @@ from google.genai import types
 from typeguard import typechecked
 from typing import Dict
 import ast
+from relationships import (
+    RelationshipType,
+    ActionType,
+    HistoryPredicateTypes,
+)  # Import the enums
+
+MODEL_NAME = "gemini-2.0-flash-001"
 
 
 # %%
 class Extractor:
-    def __init__(self) -> None:
+    def __init__(self, model_name: str = MODEL_NAME) -> None:
         self.extractor = genai.Client()
+        self.model_name = model_name
 
     def extract(self, text: str) -> list[Dict[str, str]]:
-        prompt = f"""
-            From the following text, extract all subject-predicate-object triples.
+        # predicates = the enums from relationships.py
+        predicates = (
+            [item.value for item in RelationshipType]
+            + [item.value for item in ActionType]
+            + [item.value for item in HistoryPredicateTypes]
+        )
+
+        prompt = f"""<prompt>
+            <instructions>
+            From the following text, extract the most significant subject-predicate-object triples. 
+            Ignore relationships where the subject or object is a general term like "people," "person," "family," "nobles," "parents," "father," "marriage," etc., unless a specific named entity is clearly associated with that term in the text. 
+            Focus on extracting triples where specific individuals, families, or named entities are the subject and object.
             Identify any pronouns and replace them with the proper noun they refer to, if it is clearly identifiable within the text.
-            Return the extracted triples as a Python list of tuples, where each tuple is in the format: (subject, predicate, object) 
-            ensuring there is Subject, Predicate and Object. Return only the list so that it can be processed by ast.literal_eval with no markdown formatting.
-
-            Example 1:
-            Text: "Alice loves Bob. She admires him greatly."
-            Response: [("Alice", "loves", "Bob"), ("Alice", "admires greatly", "Bob")]
-
-            Example 2:
-            Text: "The cat sat on the mat. It looked comfortable."
-            Response: [("cat", "sat on", "mat"), ("cat", "looked comfortable", None)] 
-
-            Example 3:
-            Text: "John went to the store. He bought milk."
-            Response: [("John", "went to", "store"), ("John", "bought", "milk")]
-
-            Text: '{text}'
-            Response:
+            Return the extracted triples as a Python list of tuples, where each tuple is in the format: (subject, predicate, object) ensuring there is always a subject, predicate and object.
+            Return *only* the raw Python list string, without any markdown formatting (like ```python ... ``` or ``` ... ```), so that it can be directly processed by `ast.literal_eval`.
+            </instructions>
+            <examples>
+            <example>
+            <text>Leonardo da Vinci was a painter, sculptor, architect, inventor and mathematician.</text>
+            <response>[('Leonardo da Vinci', 'was', 'painter'),('Leonardo da Vinci', 'was', 'sculptor'), ('Leonardo da Vinci', 'was', 'architect'), ('Leonardo da Vinci', 'was', 'inventor'), ('Leonardo da Vinci', 'was', 'mathematician')]</response>
+            </example>
+            <example>
+            <text>Savonarola attacked corruption, angered the pope, was accused of heresy, and was sentenced to death on 23rd of May 1498.</text>
+            <response>[('Savonarola', 'attack', 'corruption'), ('pope', 'has_grudge_against', 'Savonarola'), ('Savonarola', 'declared', 'heretic'), ('Savonarola', 'executed', '5/23/1498')]</response>
+            </example>
+            <example>
+            <text>The Medici family were patrons of artists like Michelangelo.</text>
+            <response>[('Medici family', 'were patrons of', 'Michelangelo')]</response>
+            </example>
+            </examples>
+            <input_text>{text}</input_text>
+            <output_format_description>Respond only with the Python list of tuples of subject-predicate-object triples.</output_format_description>
+            </prompt>
         """
-
         response = self.extractor.models.generate_content(
-            model="gemini-2.0-flash-001", contents=prompt
+            model=self.model_name, contents=prompt
         )
         print(response.text)
         # Use regex to find the list within the response text, handling potential markdown fences
@@ -65,7 +85,7 @@ class Storyteller:
         self.retriever = Retriever()
         self.extractor = Extractor()
         self.client = genai.Client()
-        self.model = "gemini-2.0-flash-lite-001"
+        self.model_name = MODEL_NAME
 
     @typechecked
     def generate_next_step(self, query: str) -> str:
