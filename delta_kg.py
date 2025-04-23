@@ -46,7 +46,7 @@ relevant_triples = get_relevant_edges(new_blurb, kg)
 # %%
 from google import genai
 from google.genai import types
-import ast
+from storyteller import get_list_from_response
 
 # %%
 MODEL_NAME = "gemini-2.5-flash-preview-04-17"
@@ -78,13 +78,24 @@ def update_kg(
             temperature=0.0,
         ),
     )
-    new_triples = ast.literal_eval(response.text)
+    new_triples = get_list_from_response(response)
+    print(f"{new_triples=}")
     for triple in new_triples:
-        to_node = lambda x: x.lower().replace(" ", "_")
-        triple = (to_node(triple[0]), to_node(triple[2]), triple[1])
-        kg.graph.add_edge(*triple)
+        kg.add_edge(*triple)
     return kg
 
 
 # %%
-kg.query("Stone Age")
+relevant_entities = r.get_relevant_entities(new_blurb, kg)
+for entity in relevant_entities:
+    print(entity, kg.query(entity))
+    print("-" * 100)
+
+# %%
+kg = update_kg(new_blurb, kg, relevant_triples)
+
+# %%
+for entity in relevant_entities:
+    print(entity, kg.query(entity))
+    print("-" * 100)
+# %%
