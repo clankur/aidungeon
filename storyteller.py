@@ -6,7 +6,7 @@ from retriever import Retriever
 from google import genai
 from google.genai import types
 from typeguard import typechecked
-from typing import Dict
+from typing import Dict, Any
 import ast
 from relationships import (
     RelationshipType,
@@ -14,7 +14,22 @@ from relationships import (
     HistoryPredicateTypes,
 )  # Import the enums
 
-MODEL_NAME = "gemini-2.0-flash-001"
+MODEL_NAME = "gemini-2.5-flash-preview-04-17"
+
+
+# %%
+def get_list_from_response(response: str) -> list[Any]:
+    match = re.search(r"\[.*?\]", response.text, re.DOTALL)
+    if match:
+        response_text = match.group(0)
+        return ast.literal_eval(response_text)
+    print("Warning: Could not find a list in the response.")
+    try:
+        response_text = response.text.strip().strip("```", "```")
+        return ast.literal_eval(response_text)
+    except (SyntaxError, ValueError):
+        print("Error: Failed to parse the response text as a list.")
+    return []
 
 
 # %%
@@ -63,20 +78,9 @@ class Extractor:
         )
         print(response.text)
         # Use regex to find the list within the response text, handling potential markdown fences
-        match = re.search(r"\[.*?\]", response.text, re.DOTALL)
-        if match:
-            response_text = match.group(0)
-            return ast.literal_eval(response_text)
-        else:
-            # Handle cases where the list format might be unexpected or not found
-            print("Warning: Could not find a list in the response.")
-            # Attempt to strip and parse anyway, or return an empty list/raise error
-            try:
-                response_text = response.text.strip().strip("```", "```")
-                return ast.literal_eval(response_text)
-            except (SyntaxError, ValueError):
-                print("Error: Failed to parse the response text as a list.")
-                return []  # Return an empty list as a fallback
+        triples = get_list_from_response(response)
+        triples = [triple for triple in triples if triple[1] not in predicates]
+        return triples
 
 
 class Storyteller:
