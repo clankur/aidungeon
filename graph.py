@@ -25,10 +25,20 @@ class KnowledgeGraph:
                 results.append((relation, v))
         return results
 
+    def add_node(self, entity: str) -> None:
+        """Adds a node to the graph."""
+        node_name = entity.replace(" ", "_").lower()
+        self.graph.add_node(node_name)
+
+    def add_edge(self, subject: str, predicate: str, object: str) -> None:
+        """Adds an edge to the graph."""
+        subject_name = subject.replace(" ", "_").lower()
+        object_name = object.replace(" ", "_").lower()
+        self.graph.add_edge(subject_name, object_name, relation=predicate)
+
     def contains(self, query: str) -> bool:
         """Checks if a node exists in the graph."""
         node_name = query.replace(" ", "_").lower()
-        print(f"{node_name=}")
         # Use networkx's has_node method
         return self.graph.has_node(node_name)
 
