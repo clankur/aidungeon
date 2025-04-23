@@ -1,8 +1,8 @@
 # %%
 from graph import KnowledgeGraph
+from transformers import pipeline
 from typing import List
 import torch
-from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
 from sentence_transformers import SentenceTransformer
 import torch.nn.functional as F
@@ -88,36 +88,24 @@ class Retriever:
         # OpenMatch/cocodr-base-msmarco => good retrievers
         # answerdotai/ModernBERT-base
         self.encoder = SentenceTransformer(model_name)
+        ner_model_name = "Babelscape/wikineural-multilingual-ner"
+        self.ner_model = pipeline(
+            "ner", model=ner_model_name, aggregation_strategy="simple"
+        )
 
-        ner_model_name = "dslim/bert-base-NER"
-        self.ner_model = pipeline("ner", model=ner_model_name)
-
-    def get_relevant_entities(self, query: str, graph: KnowledgeGraph) -> List[str]:
+    def get_relevant_entities(
+        self, query: str, graph: KnowledgeGraph, create_entities: bool = False
+    ) -> List[str]:
         ner_results = self.ner_model(query)
 
-        entities = []
-        current = ""
-        for r in ner_results:
-            tag = r["entity"]
-            word = r["word"]
+        # TODO: observe if we need to filter out based on score
+        # cursory glance, 0.5 and higher seems reasonable
+        entities = set([r["word"] for r in ner_results])
 
-            if tag.startswith("B-"):
-                if current:
-                    entities.append(current.strip())
-                current = word if not word.startswith("##") else word[2:]
-            elif tag.startswith("I-"):
-                if word.startswith("##"):
-                    current += word[2:]
-                else:
-                    current += " " + word
-            else:
-                if current:
-                    entities.append(current.strip())
-                    current = ""
-
-        if current:
-            entities.append(current.strip())
-
+        if create_entities:
+            for e in entities:
+                if not graph.contains(e):
+                    graph.add_node(e)
         print(f"{entities=}")
         return [e for e in entities if graph.contains(e)]
 
