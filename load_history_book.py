@@ -31,35 +31,17 @@ def read_pdf(path: str, page_range: tuple[int, int] = None) -> str:
 
 # %%
 # Example usage:
-pdf_file = "data/chap12.pdf"
-extracted_text = read_pdf(pdf_file)
-if extracted_text:
-    print(extracted_text)
-# %%
-from storyteller import Extractor
+if __name__ == "__main__":
+    pdf_file = "data/chap12.pdf"
+    extracted_text = read_pdf(pdf_file)
+    if extracted_text:
+        print(extracted_text)
+    # %%
+    from storyteller import Extractor
 
-# %%
-extractor = Extractor(model_name="gemini-2.0-flash-001")
-base_triples = extractor.extract(extracted_text)
-base_triples
+    # %%
+    extractor = Extractor(model_name="gemini-2.5-flash-preview-04-17")
+    base_triples = extractor.extract(extracted_text)
+    base_triples
 
-# %%
-extractor = Extractor(model_name="gemini-2.0-flash-lite-001")
-lite_triples = extractor.extract(extracted_text)
-lite_triples
-
-# %%
-len(base_triples), len(lite_triples)
-
-# %%
-# find XOR of base and lite
-xor_base_triples = [triple for triple in base_triples if triple not in lite_triples]
-xor_lite_triples = [triple for triple in lite_triples if triple not in base_triples]
-
-# %%
-xor_base_triples
-
-# %%
-xor_lite_triples
-
-# %%
+    # %%
