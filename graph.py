@@ -19,9 +19,7 @@ class KnowledgeGraph:
             # Iterate through outgoing edges (u, v, data)
             # Assumes relationship type is stored in the 'relation' attribute of the edge data
             for _u, v, data in self.graph.out_edges(node_name, data=True):
-                relation = data.get(
-                    "relation", "related_to"
-                )  # Default if 'relation' attr is missing
+                relation = data.get("relation", "related_to")
                 results.append((relation, v))
         return results
 
@@ -30,11 +28,15 @@ class KnowledgeGraph:
         node_name = entity.replace(" ", "_").lower()
         self.graph.add_node(node_name)
 
-    def add_edge(self, subject: str, predicate: str, object: str) -> None:
-        """Adds an edge to the graph."""
+    def add_edge(
+        self, subject: str, predicate: str, object: str, weight: float = 1.0
+    ) -> None:
+        """Adds a weighted edge to the graph."""
         subject_name = subject.replace(" ", "_").lower()
         object_name = object.replace(" ", "_").lower()
-        self.graph.add_edge(subject_name, object_name, relation=predicate)
+        self.graph.add_edge(
+            subject_name, object_name, relation=predicate, weight=weight
+        )
 
     def contains(self, query: str) -> bool:
         """Checks if a node exists in the graph."""

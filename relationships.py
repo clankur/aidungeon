@@ -14,42 +14,6 @@ class RelationshipType(Enum):
     IS_SPOUSE_OF = "is_spouse_of"
     IS_LOVER_OF = "is_lover_of"
 
-    # Social Relationships
-    HAS_PASSING_ACQUAINTANCE_WITH = "has_passing_acquaintance_with"
-    HAS_LONG_TERM_ACQUAINTANCE_WITH = "has_long_term_acquaintance_with"
-    IS_FRIEND_OF = "is_friend_of"
-    IS_CLOSE_FRIEND_OF = "is_close_friend_of"
-    IS_KINDRED_SPIRIT_OF = "is_kindred_spirit_of"
-    HAS_GRUDGE_AGAINST = "has_grudge_against"
-    IS_COMPANION_OF = "is_companion_of"
-
-    # Professional Relationships
-    IS_MENTOR_OF = "is_mentor_of"
-    IS_APPRENTICE_OF = "is_apprentice_of"
-    IS_FORMER_MENTOR_OF = "is_former_mentor_of"
-    IS_FORMER_APPRENTICE_OF = "is_former_apprentice_of"
-
-    # Spiritual Relationships
-    WORSHIPS = "worships"
-    WORSHIPS_EVIL_ENTITY = "worships_evil_entity"
-    IS_MEMBER_OF_RELIGIOUS_GROUP = "is_member_of_religious_group"
-
-    # Group Membership
-    IS_MEMBER_OF_GROUP = "is_member_of_group"
-    IS_FORMER_MEMBER_OF_GROUP = "is_former_member_of_group"
-
-    # Animal Bonds
-    IS_BONDED_WITH_ANIMAL = "is_bonded_with_animal"
-    IS_PET_OF = "is_pet_of"
-
-    # Antagonistic / Conflict Relationships
-    IS_AT_WAR_WITH = "is_at_war_with"
-    IS_ENEMY_OF = "is_enemy_of"
-    IS_AGENT_OF = "is_agent_of"
-    IS_SPYING_ON = "is_spying_on"
-    HAS_COMMITTED_CRIME_AGAINST = "has_committed_crime_against"
-    SEEKS_REVENGE_AGAINST = "seeks_revenge_against"
-
 
 class ActionType(Enum):
     # Warfare and Conflict

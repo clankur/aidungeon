@@ -74,7 +74,7 @@ def update_kg(
         model=MODEL_NAME,
         contents=prompt,
         config=types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            thinking_config=types.ThinkingConfig(thinking_budget=1024),
             temperature=0.0,
         ),
     )

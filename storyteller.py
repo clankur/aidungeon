@@ -74,7 +74,11 @@ class Extractor:
             </prompt>
         """
         response = self.extractor.models.generate_content(
-            model=self.model_name, contents=prompt
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
         )
         print(response.text)
         # Use regex to find the list within the response text, handling potential markdown fences
