@@ -1,48 +1,57 @@
 # %%
 import networkx as nx
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 from typeguard import typechecked
-import uuid
+from entity import Entity
+from uuid import UUID
 
 
 # %%
 class KnowledgeGraph:
-    def __init__(self, graph: nx.MultiDiGraph) -> None:
-        self.graph = graph
+    def __init__(self, graph: nx.MultiDiGraph = None) -> None:
+        self.graph = graph if graph else nx.MultiDiGraph()
 
-    def query(self, query: str) -> List[Tuple[str, str]]:
+    def query(
+        self, query: str
+    ) -> Union[List[Tuple[str, Entity]], Dict[Entity, List[Tuple[str, Entity]]]]:
         """Queries the graph for outgoing relationships from a given node."""
-        node_name = query.replace(" ", "_").lower()
-        results = []
-        if self.graph.has_node(node_name):
+        if self.graph.has_node(query):
             # Iterate through outgoing edges (u, v, data)
             # Assumes relationship type is stored in the 'relation' attribute of the edge data
-            for _u, v, data in self.graph.out_edges(node_name, data=True):
-                relation = data.get("relation", "related_to")
-                results.append((relation, v))
-        return results
+            nodes_with_query = []
+            for _, v in self.graph.out_edges(query):
+                nodes_with_query.append(v)
 
-    def add_node(self, entity: str) -> None:
+            results = {}
+            for u in nodes_with_query:
+                for _, v, data in self.graph.out_edges(u, data=True):
+                    relation = data.get("relation", "related_to")
+                    if u not in results:
+                        results[u] = []
+                    results[u].append((relation, v))
+            if len(nodes_with_query) == 1:
+                return results[nodes_with_query[0]]
+            return results
+
+    def add_node(self, entity: Entity) -> None:
         """Adds a node to the graph."""
-        node_name = entity.replace(" ", "_").lower()
-        self.graph.add_node(node_name)
+        self.graph.add_edge(entity.uuid, entity, relation="id")
+        self.graph.add_edge(entity.name, entity, relation="name")
 
     def add_edge(
-        self, subject: str, predicate: str, object: str, weight: float = 1.0
+        self,
+        subject: Union[Entity, str, UUID],
+        predicate: str,
+        object: Union[Entity, str],
+        weight: float = 1.0,
     ) -> None:
         """Adds a weighted edge to the graph."""
-        subject_name = subject.replace(" ", "_").lower()
-        object_name = object.replace(" ", "_").lower()
-        self.graph.add_edge(
-            subject_name, object_name, relation=predicate, weight=weight
-        )
+        self.graph.add_edge(subject, object, relation=predicate, weight=weight)
 
-    def contains(self, query: str) -> bool:
+    def contains(self, subject: Entity) -> bool:
         """Checks if a node exists in the graph."""
-        node_name = query.replace(" ", "_").lower()
-        # Use networkx's has_node method
-        return self.graph.has_node(node_name)
+        return self.graph.has_node(subject)
 
 
 # %%
