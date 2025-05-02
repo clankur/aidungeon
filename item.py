@@ -1,5 +1,5 @@
 from enum import Enum
-from world import Subregion, Entity
+from world import Building, Entity
 import uuid
 from uuid import UUID
 
@@ -25,9 +25,9 @@ class Item(Entity):
     """Represents an instance of an item at a specific location in the world."""
 
     item_type: ItemType
-    location: "Location"
+    location: "Building"
 
-    def __init__(self, item_type: ItemType, location: "Location") -> None:
+    def __init__(self, item_type: ItemType, location: "Building") -> None:
         super().__init__(item_type._item_name)
         self.item_type = item_type
         self.location = location

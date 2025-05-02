@@ -19,105 +19,183 @@ class TerrainType(Enum):
     HILLS = "hills"
 
 
-class Subregion(Entity):
+class Building(Entity):
+    """Represents a building."""
+
+    coords: List[Tuple[int, int]]
+    province: "Province"
+
+    def __init__(
+        self,
+        name: str,
+        coords: List[Tuple[int, int]],
+        province: "Province",
+        world: "World",
+    ) -> None:
+        """
+        Initializes a Building.
+
+        Args:
+            name: The name of the building.
+            coords: The coordinates the building occupies within a province.
+            province: The province this building belongs to.
+        """
+        super().__init__(name, world)
+        self.coords = coords
+        self.province = province
+
+    def __str__(self) -> str:
+        province_str = str(self.province).replace("\n", "\n  ")  # Indent province info
+        return f"Building(name={self.name}, coords={self.coords}\n province={province_str}\n)"
+
+    def __repr__(self) -> str:
+        return f"Building(name={self.name}, coords={self.coords}, province={self.province})"
+
+
+class Province(Entity):
     """Represents a location using a hierarchical grid system."""
 
-    subregion_coords: Tuple[int, int]
-    terrain: TerrainType
+    coords: Tuple[int, int]
     region: "Region"
-    # buildings: list[Building] TODO
+    buildings: list[list[Building | None]]
+    terrain: TerrainType
 
     def __init__(
         self,
         region: "Region",
-        subregion_coords: Tuple[int, int],
+        coords: Tuple[int, int],
+        province_dims: Tuple[int, int],
         terrain: TerrainType,
+        world: "World",
     ) -> None:
         """
-        Initializes a Location.
+        Initializes a Province.
 
         Args:
-            region: The region this location belongs to.
-            subregion_x: The x-coordinate within the region's subgrid.
-            subregion_y: The y-coordinate within the region's subgrid.
+            region: The region this province belongs to.
+            coords: The coordinates of the province within the region.
+            province_dims: The dimensions of the province.
             terrain: The type of terrain at this location.
         """
-        # Need to call Entity's __init__
-        super().__init__(
-            name=f"Subregion_{region.coords}_{subregion_coords}"
-        )  # Provide a name to Entity
+        super().__init__(name=f"Province_{region.coords}_{coords}", world=world)
+        self.buildings = [
+            [None for _ in range(province_dims[1])] for _ in range(province_dims[0])
+        ]
         self.region = region
-        self.subregion_coords = subregion_coords
+        self.coords = coords
         self.terrain = terrain
+        self.province_dims = province_dims
+        self.world = world
+
+    def create_building(
+        self, name: str, building_coords: List[Tuple[int, int]]
+    ) -> Building:
+        """Adds a building to the province grid."""
+        building = Building(name, building_coords, self, self.world)
+        for x, y in building.coords:
+            if not (0 <= x < self.province_dims[0] and 0 <= y < self.province_dims[1]):
+                raise ValueError(
+                    f"Building coordinates ({x}, {y}) are out of the province's bounds {self.province_dims}."
+                )
+            if self.buildings[x][y] is not None:
+                raise ValueError(
+                    f"Coordinate ({x}, {y}) is already occupied by building '{self.buildings[x][y].name}'."
+                )
+
+        for x, y in building.coords:
+            self.buildings[x][y] = building
+        return building
+
+    def __str__(self) -> str:
+        region_str = str(self.region).replace("\n", "\n  ")  # Indent region info
+        return f"Province(name={self.name}, coords={self.coords}, terrain={self.terrain}\n region={region_str}\n)"
 
     def __repr__(self) -> str:
-        region_info = {
-            "dims": self.region.dims,
-        }
-
-        data = {
-            "region": region_info,
-            "subregion_coords": self.subregion_coords,
-            "terrain": (
-                self.terrain.value
-                if hasattr(self.terrain, "value")
-                else str(self.terrain)
-            ),  # Get enum value or string
-        }
-        return json.dumps(data)
+        return f"Province(name='{self.name}')"
 
 
-class Region:
+class Region(Entity):
     """Represents a region of the world."""
 
     coords: Tuple[int, int]
     dims: Tuple[int, int]
-    subregions: list[list[Subregion]]
+    subregions: list[list[Province]]
 
-    def __init__(self, coords: Tuple[int, int], dims: Tuple[int, int]) -> None:
+    def __init__(
+        self,
+        coords: Tuple[int, int],
+        region_dims: Tuple[int, int],
+        province_dims: Tuple[int, int],
+        world: "World",
+    ) -> None:
+        super().__init__(name=f"Region_{coords}", world=world)
         self.coords = coords
-        self.dims = dims
+        self.region_dims = region_dims
         self.subregions = [
             [
-                Subregion(self, (x, y), random.choice(list(TerrainType)))
-                for x in range(dims[0])
+                Province(
+                    self,
+                    (x, y),
+                    province_dims,
+                    random.choice(list(TerrainType)),
+                    world,
+                )
+                for y in range(region_dims[1])
             ]
-            for y in range(dims[1])
+            for x in range(region_dims[0])
         ]
 
     def __repr__(self) -> str:
-        return f"Region(dims={self.dims}, num_locations={self.dims[0]*self.dims[1]})"
+        return f"Region(name={self.name}, coords={self.coords}, dims={self.region_dims}, n_provinces={self.region_dims[0]*self.region_dims[1]})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 class World(KnowledgeGraph):
     """Represents the entire world."""
 
     curr_time: int = 0
-    dims: Tuple[int, int]
+    world_dims: Tuple[int, int]
     regions: dict[Tuple[int, int], Region]
 
     def __init__(
         self,
-        dims: Tuple[int, int],
+        world_dims: Tuple[int, int],
         region_dims: Tuple[int, int],
+        province_dims: Tuple[int, int],
         graph: KnowledgeGraph = None,
     ) -> None:
-        self.dims = dims
+        """
+        Initializes a World.
+
+        Args:
+            world_dims: The dimensions of the world (length, width).
+            region_dims: The dimensions of the regions (length, width).
+            province_dims: The dimensions of the subregions (length, width).
+            graph: The knowledge graph to use for the world. (default: None)
+        """
         self.regions = {}
-        self.all_coords = set((x, y) for x in range(dims[0]) for y in range(dims[1]))
+        self.all_coords = set(
+            (x, y) for y in range(world_dims[1]) for x in range(world_dims[0])
+        )
+        self.world_dims = world_dims
         self.region_dims = region_dims
+        self.province_dims = province_dims
         super().__init__(graph)
 
-    def get_region(self, x: int, y: int) -> Region:
-        return self.regions[(x, y)]
+    def get_region(self, region_coord: Tuple[int, int]) -> Region:
+        return self.regions[region_coord]
 
-    def create_region(self, x: int, y: int) -> Region:
-        if (x, y) not in self.all_coords:
+    def create_region(self, region_coord: Tuple[int, int]) -> Region:
+        if region_coord not in self.all_coords:
             raise ValueError(
-                f"Coordinates ({x}, {y}) are out of bounds for world of dimensions {self.dims}"
+                f"Coordinates ({region_coord}) are out of bounds for world of dimensions {self.world_dims}"
             )
-        region = Region((x, y), self.region_dims)
-        self.regions[(x, y)] = region
+        if region_coord in self.regions:
+            raise ValueError(f"Region at coordinates ({region_coord}) already exists.")
+        region = Region(region_coord, self.region_dims, self.province_dims, self)
+        self.regions[region_coord] = region
         return region
 
     def get_current_world_time(self) -> int:

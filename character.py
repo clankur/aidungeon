@@ -2,7 +2,7 @@ from graph import KnowledgeGraph
 from relationships import RelationshipType
 from typing import Optional, List, Tuple
 from item import Entity, Item
-from world import Subregion, World
+from world import Building, World
 from entity import Entity
 import json
 
@@ -15,7 +15,7 @@ class PhysicalAttributes:
 
     inventory: List["Item"]
     owned_items: List["Item"]
-    owned_properties: List["Subregion"]
+    owned_properties: List["Building"]
 
     # physical_condition: List[
     #     "HealthCondition"
@@ -66,17 +66,15 @@ class Character(Entity):
         name: str,
         sex: str,
         race: str,
-        location: "Subregion",
+        location: "Building",
         world: "World",
     ) -> None:
-        super().__init__(name)
+        super().__init__(name, world)
         birth_time = world.get_current_world_time()
         self.personality = Personality()
         self.physical_attributes = PhysicalAttributes(
             sex=sex, birth=birth_time, race=race
         )
-        world.add_edge(self.uuid, "uuid", self)
-        world.add_edge(self.name, "name", self)
         world.add_edge(self, "location", location)
 
     def add_familial_edge(
