@@ -12,9 +12,7 @@ class KnowledgeGraph:
     def __init__(self, graph: nx.MultiDiGraph = None) -> None:
         self.graph = graph if graph else nx.MultiDiGraph()
 
-    def query(
-        self, query: str
-    ) -> Union[List[Tuple[str, Entity]], Dict[Entity, List[Tuple[str, Entity]]]]:
+    def query(self, query: str) -> Dict[Entity, List[Tuple[str, Entity]]]:
         """Queries the graph for outgoing relationships from a given node."""
         if self.graph.has_node(query):
             # Iterate through outgoing edges (u, v, data)
@@ -22,16 +20,13 @@ class KnowledgeGraph:
             nodes_with_query = []
             for _, v in self.graph.out_edges(query):
                 nodes_with_query.append(v)
-
             results = {}
             for u in nodes_with_query:
+                if u not in results:
+                    results[u] = []
                 for _, v, data in self.graph.out_edges(u, data=True):
                     relation = data.get("relation", "related_to")
-                    if u not in results:
-                        results[u] = []
                     results[u].append((relation, v))
-            if len(nodes_with_query) == 1:
-                return results[nodes_with_query[0]]
             return results
 
     def add_node(self, entity: Entity) -> None:

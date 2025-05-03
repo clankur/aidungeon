@@ -1,6 +1,6 @@
 import uuid
 from uuid import UUID
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
 
 if TYPE_CHECKING:
     from world import World
@@ -15,3 +15,6 @@ class Entity:
         self.uuid = uuid.uuid4()
         world.add_edge(self.uuid, "uuid", self)
         world.add_edge(self.name, "name", self)
+
+    def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
+        return []

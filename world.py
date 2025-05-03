@@ -3,7 +3,8 @@ import random
 import json
 from graph import KnowledgeGraph
 from entity import Entity
-from typing import List, Tuple
+from typing import List, Tuple, Dict
+from uuid import UUID
 
 
 class TerrainType(Enum):
@@ -43,6 +44,13 @@ class Building(Entity):
         super().__init__(name, world)
         self.coords = coords
         self.province = province
+
+    def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
+        province_spo = self.province.to_subject_predicate_object()
+        return province_spo + [
+            (self.name, "coords", str(self.coords)),
+            (self.name, "inProvince", self.province.name),
+        ]
 
     def __str__(self) -> str:
         province_str = str(self.province).replace("\n", "\n  ")  # Indent province info
@@ -106,6 +114,20 @@ class Province(Entity):
             self.buildings[x][y] = building
         return building
 
+    def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
+        region_spo = self.region.to_subject_predicate_object()
+        building_spo = []
+        return (
+            region_spo
+            + building_spo
+            + [
+                (self.name, "coords", str(self.coords)),
+                (self.name, "terrain", self.terrain.value),
+                (self.name, "dims", str(self.province_dims)),
+                (self.name, "inRegion", self.region.name),
+            ]
+        )
+
     def __str__(self) -> str:
         region_str = str(self.region).replace("\n", "\n  ")  # Indent region info
         return f"Province(name={self.name}, coords={self.coords}, terrain={self.terrain}\n region={region_str}\n)"
@@ -143,6 +165,13 @@ class Region(Entity):
                 for y in range(region_dims[1])
             ]
             for x in range(region_dims[0])
+        ]
+
+    def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
+        subregion_spo = []
+        return subregion_spo + [
+            (self.name, "coords", str(self.coords)),
+            (self.name, "dims", str(self.region_dims)),
         ]
 
     def __repr__(self) -> str:
@@ -197,6 +226,17 @@ class World(KnowledgeGraph):
         region = Region(region_coord, self.region_dims, self.province_dims, self)
         self.regions[region_coord] = region
         return region
+
+    def query(self, query: str) -> Dict[UUID, List[Tuple[str, str, str]]]:
+        uuid_to_spo = {}
+        results = super().query(query)  # may want to modify this as its own function
+        for subject, result in results.items():
+            uuid_to_spo[subject.uuid] = subject.to_subject_predicate_object()
+            for predicate, object in result:
+                # TODO: investigate how to handle non-unique objects names
+                # We use UUIDs internally but for an LLM UUID's are bunk
+                uuid_to_spo[subject.uuid].append((subject.name, predicate, object.name))
+        return uuid_to_spo
 
     def get_current_world_time(self) -> int:
         """Get the current time in the world."""
