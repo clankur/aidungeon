@@ -13,8 +13,7 @@ from relationships import (
     ActionType,
     HistoryPredicateTypes,
 )  # Import the enums
-
-MODEL_NAME = "gemini-2.5-flash-preview-04-17"
+from commons import MODEL_NAME
 
 
 # %%
@@ -98,7 +97,7 @@ class Storyteller:
     def init_story(self) -> Tuple[str, str]:
         world_prompt = f"""
             <prompt>
-            You're a dungeon master and storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
+            You're a storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
             <instructions>
             - Give a history of the town including important events and figures
             - Write dates in the format of BGB (Before the Game Begins - the start of the game from the perspective of the player)                

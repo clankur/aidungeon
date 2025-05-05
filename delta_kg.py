@@ -12,6 +12,7 @@ print(f"Unique edge types: {unique_edge_types}")
 from importlib import reload
 import retriever
 import graph
+from commons import MODEL_NAME
 
 # %%
 reload(retriever)
@@ -49,7 +50,6 @@ from google.genai import types
 from storyteller import get_list_from_response
 
 # %%
-MODEL_NAME = "gemini-2.5-flash-preview-04-17"
 client = genai.Client()
 
 
