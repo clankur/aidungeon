@@ -1,7 +1,7 @@
 # %%
 import re
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-from graph import KnowledgeGraph
+from world import World
 from retriever import Retriever
 from google import genai
 from google.genai import types
@@ -14,6 +14,8 @@ from relationships import (
     HistoryPredicateTypes,
 )  # Import the enums
 from commons import MODEL_NAME
+from declarations import add_edge_declaration, create_character_declaration
+from character import Character
 
 
 # %%
@@ -36,114 +38,94 @@ class Extractor:
     def __init__(self, model_name: str = MODEL_NAME) -> None:
         self.extractor = genai.Client()
         self.model_name = model_name
+        tools = types.Tool(function_declarations=[add_edge_declaration])
+        self.config = types.GenerateContentConfig(
+            tools=[tools],
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+        )
 
     def extract(self, text: str) -> list[Dict[str, str]]:
-        # predicates = the enums from relationships.py
-        predicates = (
-            [item.value for item in RelationshipType]
-            + [item.value for item in ActionType]
-            + [item.value for item in HistoryPredicateTypes]
-        )
-
-        prompt = f"""<prompt>
-            <instructions>
-            From the following text, extract the most significant subject-predicate-object triples. 
-            Ignore relationships where the subject or object is a general term like "people," "person," "family," "nobles," "parents," "father," "marriage," etc., unless a specific named entity is clearly associated with that term in the text. 
-            Focus on extracting triples where specific individuals, families, or named entities are the subject and object.
-            Identify any pronouns and replace them with the proper noun they refer to, if it is clearly identifiable within the text.
-            Return the extracted triples as a Python list of tuples, where each tuple is in the format: (subject, predicate, object) ensuring there is always a subject, predicate and object.
-            Return *only* the raw Python list string, without any markdown formatting (like ```python ... ``` or ``` ... ```), so that it can be directly processed by `ast.literal_eval`.
-            </instructions>
-            <examples>
-            <example>
-            <text>Leonardo da Vinci was a painter, sculptor, architect, inventor and mathematician.</text>
-            <response>[('Leonardo da Vinci', 'was', 'painter'),('Leonardo da Vinci', 'was', 'sculptor'), ('Leonardo da Vinci', 'was', 'architect'), ('Leonardo da Vinci', 'was', 'inventor'), ('Leonardo da Vinci', 'was', 'mathematician')]</response>
-            </example>
-            <example>
-            <text>Savonarola attacked corruption, angered the pope, was accused of heresy, and was sentenced to death on 23rd of May 1498.</text>
-            <response>[('Savonarola', 'attack', 'corruption'), ('pope', 'has_grudge_against', 'Savonarola'), ('Savonarola', 'declared', 'heretic'), ('Savonarola', 'executed', '5/23/1498')]</response>
-            </example>
-            <example>
-            <text>The Medici family were patrons of artists like Michelangelo.</text>
-            <response>[('Medici family', 'were patrons of', 'Michelangelo')]</response>
-            </example>
-            </examples>
-            <input_text>{text}</input_text>
-            <output_format_description>Respond only with the Python list of tuples of subject-predicate-object triples.</output_format_description>
-            </prompt>
-        """
         response = self.extractor.models.generate_content(
             model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+            contents=text,
+            config=self.config,
         )
-        print(response.text)
-        # Use regex to find the list within the response text, handling potential markdown fences
-        triples = get_list_from_response(response)
-        triples = [triple for triple in triples if triple[1] not in predicates]
+        triples = [
+            [p.function_call.args for p in c.content.parts if p.function_call]
+            for c in response.candidates
+        ]
         return triples
 
 
 class Storyteller:
-    def __init__(self, graph: KnowledgeGraph) -> None:
+    def __init__(self, graph: World) -> None:
         self.graph = graph
         self.retriever = Retriever()
         self.extractor = Extractor()
         self.client = genai.Client()
+        self.tools = types.Tool(
+            function_declarations=[add_edge_declaration, create_character_declaration]
+        )
         self.model_name = MODEL_NAME
 
-    def init_story(self) -> Tuple[str, str]:
-        world_prompt = f"""
-            <prompt>
-            You're a storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
-            <instructions>
-            - Give a history of the town including important events and figures
-            - Write dates in the format of BGB (Before the Game Begins - the start of the game from the perspective of the player)                
-            - Describe the town, in which region it is located and their geographical location in the world
-            - Describe all the buildings in the town at the time of 0 BGB 
-            - Describe the historical events and figures in the town and the region/province leading up to 0 BGB
-            </instructions>
-            </prompt>
-        """
-
-        world_response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=world_prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
-        )
-
+    def generate_character_story(self) -> str:
         character_prompt = f"""
             <prompt>
-            You're a dungeon master and storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
-            <game_world>{world_response.text}</game_world>
+            You are a story teller that is describing the four characters in which are going to participate in a Sim-like environement.
             <instructions>
             - For each character:
                 - Give a history of their family 
                 - Write a short backstory of their life uptil year 0 BGB (Before the Game Begins - the start of the game from the perspective of the player)
-                - Write dates in the format of BGB                 
+                - Write dates in the format of BGB
                 - Describe their physical attributes, including sex, race, birth year
                 - Describe their personality
                 - Describe their goals and motivations
             </instructions>
             </prompt>
         """
-        character_response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=character_prompt,
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            ),
+        char_story_config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
         )
-        # prompt it to create JSON objects?
-        # or create character using tool use?
+        return self.client.models.generate_content(
+            model=MODEL_NAME, config=char_story_config, contents=character_prompt
+        ).text
 
-        # world_triples = self.extractor.extract(world_response.text)
-        # character_triples = self.extractor.extract(character_response.text)
-        return world_response.text, character_response.text
+    def init_story(self, characters_story) -> str:
+        location = self.graph.get_entity("House")[0]
+        # locations = [location.name for location in self.graph.locations]
+        contents = [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part(text=characters_story),
+                ],
+            )
+        ]
+
+        # create characters based on story
+        add_char_config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0), tools=[self.tools]
+        )
+        response = self.client.models.generate_content(
+            model=MODEL_NAME,
+            config=add_char_config,
+            contents=contents,
+        )
+        function_calls = [
+            [p.function_call for p in c.content.parts if p.function_call]
+            for c in response.candidates
+        ][0]
+        if not function_calls:
+            raise ValueError(f"Did not call function {response.text}")
+        for call in function_calls:
+            if call.name == create_character_declaration.get("name"):
+                call.args["world"] = self.graph
+                call.args["location"] = location
+                Character(**call.args)
+                print(call.args)
+            else:
+                print(call.args)
+        return function_calls
 
     @typechecked
     def generate_next_step(self, query: str) -> str:
