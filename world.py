@@ -227,6 +227,9 @@ class World(KnowledgeGraph):
         self.regions[region_coord] = region
         return region
 
+    def get_entity(self, name: str) -> List[Entity]:
+        return [entity for _, entity in self.graph.out_edges(name)]
+
     def query(self, query: str) -> Dict[UUID, List[Tuple[str, str, str]]]:
         uuid_to_spo = {}
         results = super().query(query)  # may want to modify this as its own function

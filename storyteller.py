@@ -6,7 +6,7 @@ from retriever import Retriever
 from google import genai
 from google.genai import types
 from typeguard import typechecked
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import ast
 from relationships import (
     RelationshipType,
@@ -95,6 +95,57 @@ class Storyteller:
         self.client = genai.Client()
         self.model_name = MODEL_NAME
 
+    def init_story(self) -> Tuple[str, str]:
+        world_prompt = f"""
+            <prompt>
+            You're a dungeon master and storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
+            <instructions>
+            - Give a history of the town including important events and figures
+            - Write dates in the format of BGB (Before the Game Begins - the start of the game from the perspective of the player)                
+            - Describe the town, in which region it is located and their geographical location in the world
+            - Describe all the buildings in the town at the time of 0 BGB 
+            - Describe the historical events and figures in the town and the region/province leading up to 0 BGB
+            </instructions>
+            </prompt>
+        """
+
+        world_response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=world_prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+
+        character_prompt = f"""
+            <prompt>
+            You're a dungeon master and storyteller, generating initial the game world but write in the perspective of a historical account you would write in a textbook.
+            <game_world>{world_response.text}</game_world>
+            <instructions>
+            - For each character:
+                - Give a history of their family 
+                - Write a short backstory of their life uptil year 0 BGB (Before the Game Begins - the start of the game from the perspective of the player)
+                - Write dates in the format of BGB                 
+                - Describe their physical attributes, including sex, race, birth year
+                - Describe their personality
+                - Describe their goals and motivations
+            </instructions>
+            </prompt>
+        """
+        character_response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=character_prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            ),
+        )
+        # prompt it to create JSON objects?
+        # or create character using tool use?
+
+        # world_triples = self.extractor.extract(world_response.text)
+        # character_triples = self.extractor.extract(character_response.text)
+        return world_response.text, character_response.text
+
     @typechecked
     def generate_next_step(self, query: str) -> str:
         relevant_entities = self.retriever.retrieve(query, self.graph)
@@ -105,10 +156,8 @@ class Storyteller:
             You're a dungeon master and storyteller that provides any kind of game, roleplaying and story content.
             Instructions:
             - Be specific, literal, concrete, creative, grounded and clear
-            - Continue the text where it ends without repeating
             - Avoid reusing themes, sentences, dialog or descriptions
             - Continue unfinished sentences
-            - > means an action attempt; it is forbidden to output >
             - Show realistic consequences
 
             Use the following information to generate the next step in the story:
@@ -116,13 +165,13 @@ class Storyteller:
         """
         print(prompt)
 
-        # response = self.client.models.generate_content(
-        #     model=self.model,
-        #     contents=prompt,
-        #     config=types.GenerateContentConfig(
-        #         max_output_tokens=512,
-        #     ),
-        # )
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=512,
+            ),
+        )
         text = """
         The air crackled with an unnatural heat, not the searing blaze of hell, but something more insidious: the stagnant, oily residue of a forgotten war. George Bush, or rather, the essence of him, flickered in the periphery, a phantom limb of a man. His form shimmered, less a person and more a composite of anxieties and accusations. The weights pulsed, a crude metronome counting down to something. > He tried to solidify his form, to anchor himself to a solid reality but the effort felt like trying to grasp smoke. The very definition of him – "war," "hell," "murder" – swirled around him, suffocating, heavy. The ground beneath his spectral feet shifted, the landscape morphing. Initially, the battlefield appeared; a scene of absolute destruction, then an endless desert, the sun a malevolent eye staring from the cloudless sky. Next came a courtroom, the faces of the jury a blur of judgment. Bush tried to speak, to offer some defense, but only a garbled whisper escaped his lips, swallowed by the echoing chambers. Fear, a cold, sharp wire, tightened around his spectral throat. The weight of all he was defined by threatened to crush what remained of him.\n
         """

@@ -68,9 +68,12 @@ class Character(Entity):
         race: str,
         location: "Building",
         world: "World",
+        birth_time: int,
     ) -> None:
         super().__init__(name, world)
-        birth_time = world.get_current_world_time()
+        birth_time = (
+            birth_time if birth_time is not None else world.get_current_world_time()
+        )
         self.personality = Personality()
         self.physical_attributes = PhysicalAttributes(
             sex=sex, birth=birth_time, race=race
