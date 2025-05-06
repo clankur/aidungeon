@@ -42,6 +42,8 @@ class Extractor:
         self.config = types.GenerateContentConfig(
             tools=[tools],
             thinking_config=types.ThinkingConfig(thinking_budget=0),
+            seed=0,
+            temperature=0,
         )
 
     def extract(self, text: str) -> list[Dict[str, str]]:
@@ -67,14 +69,20 @@ class Storyteller:
             function_declarations=[add_edge_declaration, create_character_declaration]
         )
         self.model_name = MODEL_NAME
+        self.gen_config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
+            seed=0,
+            temperature=0,
+        )
 
     def generate_character_story(self) -> str:
         character_prompt = f"""
             <prompt>
-            You are a story teller that is describing the four characters in which are going to participate in a Sim-like environement.
+            You are a story teller that is describing the four characters in which are going to participate in a Sim-like environement in the same house. 
+            Write in the style of a historian writing a history textbook.
             <instructions>
             - For each character:
-                - Give a history of their family 
+                - Give a history of their family, including names of their parents and family.
                 - Write a short backstory of their life uptil year 0 BGB (Before the Game Begins - the start of the game from the perspective of the player)
                 - Write dates in the format of BGB
                 - Describe their physical attributes, including sex, race, birth year
@@ -83,11 +91,11 @@ class Storyteller:
             </instructions>
             </prompt>
         """
-        char_story_config = types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-        )
+
         return self.client.models.generate_content(
-            model=MODEL_NAME, config=char_story_config, contents=character_prompt
+            model=MODEL_NAME,
+            config=self.gen_config,
+            contents=character_prompt,
         ).text
 
     def init_story(self, characters_story) -> str:
@@ -101,14 +109,16 @@ class Storyteller:
                 ],
             )
         ]
-
-        # create characters based on story
-        add_char_config = types.GenerateContentConfig(
-            thinking_config=types.ThinkingConfig(thinking_budget=0), tools=[self.tools]
+        create_character_config = types.GenerateContentConfig(
+            tools=[self.tools],
+            thinking_config=self.gen_config.thinking_config,
+            seed=self.gen_config.seed,
+            temperature=self.gen_config.temperature,
         )
+
         response = self.client.models.generate_content(
             model=MODEL_NAME,
-            config=add_char_config,
+            config=create_character_config,
             contents=contents,
         )
         function_calls = [
@@ -147,11 +157,7 @@ class Storyteller:
         print(prompt)
 
         response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=512,
-            ),
+            model=self.model, contents=prompt, config=self.gen_config
         )
         text = """
         The air crackled with an unnatural heat, not the searing blaze of hell, but something more insidious: the stagnant, oily residue of a forgotten war. George Bush, or rather, the essence of him, flickered in the periphery, a phantom limb of a man. His form shimmered, less a person and more a composite of anxieties and accusations. The weights pulsed, a crude metronome counting down to something. > He tried to solidify his form, to anchor himself to a solid reality but the effort felt like trying to grasp smoke. The very definition of him – "war," "hell," "murder" – swirled around him, suffocating, heavy. The ground beneath his spectral feet shifted, the landscape morphing. Initially, the battlefield appeared; a scene of absolute destruction, then an endless desert, the sun a malevolent eye staring from the cloudless sky. Next came a courtroom, the faces of the jury a blur of judgment. Bush tried to speak, to offer some defense, but only a garbled whisper escaped his lips, swallowed by the echoing chambers. Fear, a cold, sharp wire, tightened around his spectral throat. The weight of all he was defined by threatened to crush what remained of him.\n
@@ -160,17 +166,3 @@ class Storyteller:
         print(triples)
 
         return text
-
-
-# %%
-if __name__ == "__main__":
-    from load_conceptnet import load_conceptnet_csv
-
-    # %%
-    en_conceptnet_path = "data/conceptnet-assertions-5.7.0-en.csv"
-    graph = KnowledgeGraph(load_conceptnet_csv(en_conceptnet_path))
-    # %%
-    storyteller = Storyteller(graph)
-    output = storyteller.generate_next_step("Where is President George Bush?")
-    print(output)
-# %%
