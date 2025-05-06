@@ -1,5 +1,9 @@
 # %%
 from importlib import reload
+import character
+
+reload(character)
+
 import storyteller
 
 reload(storyteller)
@@ -10,7 +14,8 @@ reload(world)
 
 # %%
 from storyteller import Storyteller
-from world import World
+from world import World, Tile
+from character import Character
 
 # %%
 world = World(
@@ -20,7 +25,7 @@ world = World(
 )
 region = world.create_region((0, 0))
 province = region.subregions[0][0]
-house = province.create_building("House", [(0, 0)])
+house = province.create_building("House", (0, 0))
 
 storyteller = Storyteller(world)
 # %%
@@ -34,6 +39,8 @@ function_calls
 world.graph.nodes
 
 # %%
-world.query("Anya Petrova")
+location = house.tiles[(0, 0)]
+# %%
+location
 
 # %%

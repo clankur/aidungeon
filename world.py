@@ -3,8 +3,11 @@ import random
 import json
 from graph import KnowledgeGraph
 from entity import Entity
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from character import Character
 
 
 class TerrainType(Enum):
@@ -20,30 +23,103 @@ class TerrainType(Enum):
     HILLS = "hills"
 
 
+class Tile(Entity):
+    """Represents a single tile within a building."""
+
+    building: "Building"
+    local_coords: Tuple[int, int]
+
+    def __init__(
+        self,
+        building: "Building",
+        local_coords: Tuple[int, int],
+        world: "World",
+        name: Optional[str] = None,
+    ) -> None:
+        name = name if name else f"{building.name}_tile_{local_coords}"
+        super().__init__(name, world)
+        self.building = building
+        self.local_coords = local_coords
+        self.is_occupied = False
+
+        self.world = world
+        world.add_edge(self, "part_of", self.building)
+
+    def add_occupant(self, entity: Entity):
+        print(
+            f"adding {entity.name}",
+            self.is_occupied,
+            type(entity).__name__ == "Character",
+        )
+        self.is_occupied = self.is_occupied or type(entity).__name__ == "Character"
+        self.world.add_edge(entity, "inside", self.building)
+        self.world.add_edge(entity, "occupying", self)
+        self.world.add_edge(self, "is_occupied_by", entity)
+
+    def __repr__(self) -> str:
+        return f"Tile(name='{self.name}', building='{self.building.name}', coords={self.local_coords}'), is_occupied={self.is_occupied}"
+
+    def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
+        spo = [
+            (self.name, "part_of", self.building.name),
+            (self.name, "has_local_coords", str(self.local_coords)),
+        ]
+        return spo
+
+
 class Building(Entity):
     """Represents a building."""
 
-    coords: List[Tuple[int, int]]
+    coords: Tuple[int, int]
     province: "Province"
+    internal_dims: Tuple[int, int]
+    tiles: Dict[Tuple[int, int], "Tile"]
+    world: "World"
 
     def __init__(
         self,
         name: str,
-        coords: List[Tuple[int, int]],
+        coords: Tuple[int, int],
         province: "Province",
         world: "World",
+        internal_dims: Tuple[int, int] = (3, 3),
     ) -> None:
         """
         Initializes a Building.
 
         Args:
             name: The name of the building.
-            coords: The coordinates the building occupies within a province.
+            coords: The coordinates of the building within a province.
             province: The province this building belongs to.
+            world: The world instance.
+            internal_dims: The internal dimensions of the building (width, height).
         """
         super().__init__(name, world)
         self.coords = coords
         self.province = province
+        self.world = world
+        self.internal_dims = internal_dims
+        self.tiles = {}
+        self._initialize_tiles()
+
+    def _initialize_tiles(self) -> None:
+        """Creates the internal tiles for the building."""
+        for x in range(self.internal_dims[0]):
+            for y in range(self.internal_dims[1]):
+                self.tiles[(x, y)] = Tile(
+                    building=self,
+                    local_coords=(x, y),
+                    world=self.world,
+                )
+
+    def get_tile(self, local_coords: Tuple[int, int]) -> Optional["Tile"]:
+        """Gets a tile at the given local coordinates within the building."""
+        return self.tiles.get(local_coords)
+
+    def find_unoccupied_tile(self) -> Optional["Tile"]:
+        """Finds the first unoccupied tile in the building."""
+        free_tiles = [tile for tile in self.tiles.values() if not tile.is_occupied]
+        return random.choice(free_tiles)
 
     def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
         province_spo = self.province.to_subject_predicate_object()
@@ -57,7 +133,7 @@ class Building(Entity):
         return f"Building(name={self.name}, coords={self.coords}\n province={province_str}\n)"
 
     def __repr__(self) -> str:
-        return f"Building(name={self.name}, coords={self.coords}, province={self.province})"
+        return f"Building(name={self.name}, coords={self.coords}, province={self.province}, internal_dims={self.internal_dims})"
 
 
 class Province(Entity):
@@ -99,19 +175,18 @@ class Province(Entity):
         self, name: str, building_coords: List[Tuple[int, int]]
     ) -> Building:
         """Adds a building to the province grid."""
+        x, y = building_coords
+        if not (0 <= x < self.province_dims[0] and 0 <= y < self.province_dims[1]):
+            raise ValueError(
+                f"Building coordinates ({x}, {y}) are out of the province's bounds {self.province_dims}."
+            )
+        if self.buildings[x][y] is not None:
+            raise ValueError(
+                f"Coordinate ({x}, {y}) is already occupied by building '{self.buildings[x][y].name}'."
+            )
         building = Building(name, building_coords, self, self.world)
-        for x, y in building.coords:
-            if not (0 <= x < self.province_dims[0] and 0 <= y < self.province_dims[1]):
-                raise ValueError(
-                    f"Building coordinates ({x}, {y}) are out of the province's bounds {self.province_dims}."
-                )
-            if self.buildings[x][y] is not None:
-                raise ValueError(
-                    f"Coordinate ({x}, {y}) is already occupied by building '{self.buildings[x][y].name}'."
-                )
 
-        for x, y in building.coords:
-            self.buildings[x][y] = building
+        self.buildings[x][y] = building
         return building
 
     def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:

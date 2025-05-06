@@ -1,7 +1,7 @@
 # %%
 import re
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-from world import World
+from world import World, Building
 from retriever import Retriever
 from google import genai
 from google.genai import types
@@ -99,7 +99,7 @@ class Storyteller:
         ).text
 
     def init_story(self, characters_story) -> str:
-        location = self.graph.get_entity("House")[0]
+        location: Building = self.graph.get_entity("House")[0]
         # locations = [location.name for location in self.graph.locations]
         contents = [
             types.Content(
@@ -130,9 +130,11 @@ class Storyteller:
         for call in function_calls:
             if call.name == create_character_declaration.get("name"):
                 call.args["world"] = self.graph
-                call.args["location"] = location
-                Character(**call.args)
-                print(call.args)
+                tile = location.find_unoccupied_tile()
+                call.args["location"] = tile
+                if call.args["location"] is None:
+                    raise ValueError(f"No tiles left in {location}")
+                character = Character(**call.args)
             else:
                 print(call.args)
         return function_calls
@@ -166,3 +168,6 @@ class Storyteller:
         print(triples)
 
         return text
+
+
+# %%

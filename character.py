@@ -2,7 +2,7 @@ from graph import KnowledgeGraph
 from relationships import RelationshipType
 from typing import Optional, List, Tuple
 from item import Entity, Item
-from world import Building, World
+from world import Building, World, Tile
 from entity import Entity
 import json
 
@@ -66,19 +66,19 @@ class Character(Entity):
         name: str,
         sex: str,
         race: str,
-        location: "Building",
+        location: "Tile",
         world: "World",
-        birth_time: int,
+        birth_time: Optional[int] = None,
     ) -> None:
         super().__init__(name, world)
-        birth_time = (
+        actual_birth_time = (
             birth_time if birth_time is not None else world.get_current_world_time()
         )
         self.personality = Personality()
         self.physical_attributes = PhysicalAttributes(
-            sex=sex, birth=birth_time, race=race
+            sex=sex, birth=actual_birth_time, race=race
         )
-        world.add_edge(self, "location", location)
+        location.add_occupant(self)
 
     def add_familial_edge(
         self,
