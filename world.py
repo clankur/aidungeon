@@ -40,24 +40,42 @@ class Tile(Entity):
         super().__init__(name, world)
         self.building = building
         self.local_coords = local_coords
-        self.is_occupied = False
 
         self.world = world
         world.add_edge(self, "part_of", self.building)
 
     def add_occupant(self, entity: Entity):
-        print(
-            f"adding {entity.name}",
-            self.is_occupied,
-            type(entity).__name__ == "Character",
-        )
-        self.is_occupied = self.is_occupied or type(entity).__name__ == "Character"
+        from character import Character
+
+        # General relationships for any entity on the tile
         self.world.add_edge(entity, "inside", self.building)
-        self.world.add_edge(entity, "occupying", self)
-        self.world.add_edge(self, "is_occupied_by", entity)
+        self.world.add_edge(entity, "location", self)
+
+        if isinstance(entity, Character):
+            # Check if a character already occupies this tile
+            existing_character_occupants = self.world.get_edges(
+                source=self, predicate="is_occupied_by"
+            )
+            if len(
+                existing_character_occupants
+            ):  # If the list is not empty, a character is already there
+                # Assuming occupant_entity name is useful for the error message, get it from the first entry
+                occupant_name = (
+                    existing_character_occupants[0][1].name
+                    if hasattr(existing_character_occupants[0][1], "name")
+                    else "Unknown Occupant"
+                )
+                print(existing_character_occupants)
+                raise ValueError(
+                    f"Tile {self.name} at {self.local_coords} is already occupied by character {occupant_name}."
+                )
+            self.world.add_edge(self, "is_occupied_by", entity)
+        else:
+            # For non-character entities, use a different predicate
+            self.world.add_edge(self, "contains", entity)
 
     def __repr__(self) -> str:
-        return f"Tile(name='{self.name}', building='{self.building.name}', coords={self.local_coords}'), is_occupied={self.is_occupied}"
+        return f"Tile(name='{self.name}', building='{self.building.name}', coords={self.local_coords})"
 
     def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
         spo = [
@@ -65,6 +83,27 @@ class Tile(Entity):
             (self.name, "has_local_coords", str(self.local_coords)),
         ]
         return spo
+
+    def render(self) -> str:
+        """Renders the tile based on its occupant."""
+        # from character import Character # No longer needed here due to design assumptions
+
+        # Prioritize rendering Character
+        character_occupants = self.world.get_edges(
+            source=self, predicate="is_occupied_by"
+        )
+        if character_occupants:  # If the list is not empty, a Character is there
+            print(character_occupants)
+            character_entity = character_occupants[0][2]
+            # We assume this entity has a render() method, which Character does.
+            return character_entity.render()
+
+        # If no character, check for other entities
+        other_entities = self.world.get_edges(source=self, predicate="contains_entity")
+        if other_entities:  # If the list is not empty
+            return "*"  # Symbol for non-character entities
+
+        return "."  # Empty tile
 
 
 class Building(Entity):
@@ -117,9 +156,21 @@ class Building(Entity):
         return self.tiles.get(local_coords)
 
     def find_unoccupied_tile(self) -> Optional["Tile"]:
-        """Finds the first unoccupied tile in the building."""
-        free_tiles = [tile for tile in self.tiles.values() if not tile.is_occupied]
-        return random.choice(free_tiles)
+        """Randomly finds the first unoccupied tile in the building (by a Character)."""
+        # from character import Character # No longer needed due to simplified check
+
+        occupied_tiles_coords = [
+            tile.local_coords
+            for tile, _, _ in self.world.get_edges(predicate="is_occupied_by")
+        ]
+
+        unoccupied_tiles = [
+            tile
+            for tile in self.tiles.values()
+            if tile.local_coords not in occupied_tiles_coords
+        ]
+
+        return random.choice(unoccupied_tiles) if unoccupied_tiles else None
 
     def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
         province_spo = self.province.to_subject_predicate_object()
@@ -134,6 +185,19 @@ class Building(Entity):
 
     def __repr__(self) -> str:
         return f"Building(name={self.name}, coords={self.coords}, province={self.province}, internal_dims={self.internal_dims})"
+
+    def render(self) -> str:
+        """Renders the building's tiles as a grid."""
+        output = f"Building: {self.name}\n"
+        rows = []
+        for y in range(self.internal_dims[1]):  # Height
+            row_chars = []
+            for x in range(self.internal_dims[0]):  # Width
+                tile = self.tiles.get((x, y))
+                row_chars.append(tile.render())
+            rows.append("".join(row_chars))
+        output += "\n".join(rows)
+        return output
 
 
 class Province(Entity):

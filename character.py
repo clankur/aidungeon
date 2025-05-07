@@ -111,3 +111,15 @@ class Character(Entity):
         ]
         # TODO: for disambiguation consider bundling UUID with name
         return personality + physical_attributes
+
+    def render(self) -> str:
+        """Returns the character's initials for rendering."""
+        name_parts = self.name.split()
+        if len(name_parts) > 1:
+            return (name_parts[0][0] + name_parts[-1][0]).upper()
+        elif len(self.name) > 1:
+            return self.name[:2].upper()
+        elif len(self.name) == 1:
+            return self.name[0].upper()
+        else:
+            return "??"

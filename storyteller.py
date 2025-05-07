@@ -83,8 +83,8 @@ class Storyteller:
             <instructions>
             - For each character:
                 - Give a history of their family, including names of their parents and family.
-                - Write a short backstory of their life uptil year 0 BGB (Before the Game Begins - the start of the game from the perspective of the player)
-                - Write dates in the format of BGB
+                - Write a short backstory of their life uptil year 0 
+                - Write dates in the format of BGB (Before the Game Begins - the start of the game from the perspective of the player)
                 - Describe their physical attributes, including sex, race, birth year
                 - Describe their personality
                 - Describe their goals and motivations

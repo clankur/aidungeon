@@ -1,5 +1,9 @@
 # %%
 from importlib import reload
+import declarations
+
+reload(declarations)
+
 import character
 
 reload(character)
@@ -16,6 +20,7 @@ reload(world)
 from storyteller import Storyteller
 from world import World, Tile
 from character import Character
+from declarations import *
 
 # %%
 world = World(
@@ -36,11 +41,7 @@ print(characters_story)
 function_calls = storyteller.init_story(characters_story)
 function_calls
 # %%
-world.graph.nodes
-
-# %%
-location = house.tiles[(0, 0)]
-# %%
-location
-
+# render the tiles within a building
+print(house.render())
+world.curr_time += 1
 # %%

@@ -1,7 +1,7 @@
 # %%
 import networkx as nx
 from collections import defaultdict
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Optional
 from typeguard import typechecked
 from entity import Entity
 from uuid import UUID
@@ -47,6 +47,52 @@ class KnowledgeGraph:
     def contains(self, subject: Entity) -> bool:
         """Checks if a node exists in the graph."""
         return self.graph.has_node(subject)
+
+    def get_edges(
+        self,
+        source: Optional[Union[Entity, str, UUID]] = None,
+        predicate: Optional[str] = None,
+        object_node: Optional[Union[Entity, str, UUID]] = None,
+    ) -> List[Tuple[Union[Entity, str, UUID], str, Union[Entity, str, UUID]]]:
+        """
+        Retrieves edges from the graph based on source, predicate, and/or object.
+
+        Args:
+            source: The source node of the edge.
+            predicate: The type of relationship (edge's 'relation' attribute).
+            object_node: The target node of the edge.
+
+        Returns:
+            A list of tuples, where each tuple is (source, predicate, object_node).
+        """
+        edges_found = []
+
+        candidate_edges_iter = None
+
+        if source is not None:
+            if self.graph.has_node(source):
+                # Get all outgoing edges from the source
+                # For MultiDiGraph, out_edges(u, data=True) gives (u, v, data) for all v
+                candidate_edges_iter = self.graph.out_edges(source, data=True)
+            else:  # Source node doesn't exist, so no edges from it
+                return []
+        else:
+            # Iterate through all edges if no source is specified
+            candidate_edges_iter = self.graph.edges(data=True)
+
+        for u, v, data in candidate_edges_iter:
+            edge_predicate = data.get("relation")
+
+            # If source was specified, u will always match source due to how candidate_edges_iter was formed.
+            # So we only need to check predicate and object_node if they are specified.
+
+            predicate_match = (predicate is None) or (edge_predicate == predicate)
+            object_match = (object_node is None) or (v == object_node)
+
+            if predicate_match and object_match:
+                edges_found.append((u, edge_predicate, v))
+
+        return edges_found
 
 
 # %%
