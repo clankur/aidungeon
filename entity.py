@@ -18,3 +18,7 @@ class Entity:
 
     def to_subject_predicate_object(self) -> List[Tuple[str, str, str]]:
         return []
+
+    def render(self) -> str:
+        """Default render method for entities. Returns an empty cell."""
+        return "."

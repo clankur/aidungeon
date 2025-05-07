@@ -5,6 +5,7 @@ from graph import KnowledgeGraph
 from entity import Entity
 from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 from uuid import UUID
+from enums import get_item_emoji
 
 if TYPE_CHECKING:
     from character import Character
@@ -86,22 +87,20 @@ class Tile(Entity):
 
     def render(self) -> str:
         """Renders the tile based on its occupant."""
-        # from character import Character # No longer needed here due to design assumptions
-
         # Prioritize rendering Character
         character_occupants = self.world.get_edges(
             source=self, predicate="is_occupied_by"
         )
         if character_occupants:  # If the list is not empty, a Character is there
-            print(character_occupants)
             character_entity = character_occupants[0][2]
-            # We assume this entity has a render() method, which Character does.
             return character_entity.render()
 
         # If no character, check for other entities
-        other_entities = self.world.get_edges(source=self, predicate="contains_entity")
+        other_entities = self.world.get_edges(source=self, predicate="contains")
         if other_entities:  # If the list is not empty
-            return "*"  # Symbol for non-character entities
+            # Get the first entity's name and use it to look up the emoji
+            entity_name = other_entities[0][2].name
+            return get_item_emoji(entity_name)
 
         return "."  # Empty tile
 

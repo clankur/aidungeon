@@ -2,6 +2,7 @@ from enum import Enum
 from world import Building, Entity
 import uuid
 from uuid import UUID
+from enums import get_item_emoji
 
 
 class ItemType(Enum):
@@ -39,3 +40,7 @@ class Item(Entity):
         except AttributeError:
             pass
         return f"Item(item_type={self.item_type.__repr__()}, location={location_repr})"
+
+    def render(self) -> str:
+        """Returns the item's emoji based on its type."""
+        return get_item_emoji(self.name)

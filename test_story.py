@@ -1,5 +1,6 @@
 # %%
 from importlib import reload
+import random
 import declarations
 
 reload(declarations)
@@ -23,6 +24,7 @@ from character import Character
 from declarations import *
 
 # %%
+random.seed(42)
 world = World(
     world_dims=(3, 3),
     region_dims=(4, 4),
