@@ -1,3 +1,4 @@
+import random
 from graph import KnowledgeGraph
 from typing import Optional, List, Tuple
 from item import Entity, Item
@@ -78,19 +79,70 @@ class Character(Entity):
         self.physical_attributes = PhysicalAttributes(
             sex=sex, birth=actual_birth_time, race=race
         )
+        self.world = world
         location.add_occupant(self)
 
     def add_familial_edge(
         self,
-        world_graph: "KnowledgeGraph",
         subject: "Character",
         predicate: RelationshipType,
         object: "Character",
     ) -> None:
         if predicate in [relation for relation in list(RelationshipType)]:
-            world_graph.add_edge(subject, predicate.value, object)
+            self.world.add_edge(subject, predicate.value, object)
         else:
             raise ValueError(f"Invalid predicate: {predicate}")
+
+    def move(self, coords: Optional[Tuple[int, int]] = None) -> None:
+        curr_location = self.world.get_edges(
+            predicate="is_occupied_by", object_node=self
+        )
+        if len(curr_location) == 0:
+            raise ValueError(f"Character {self.name} has no location! {curr_location}")
+        if len(curr_location) > 1:
+            raise ValueError(
+                f"Character {self.name} in multiple tiles! {curr_location}"
+            )
+        curr_tile: Tile = curr_location[0][0]
+        curr_building = curr_tile.building
+        valid_positions = [
+            (curr_tile.local_coords[0] - 1, curr_tile.local_coords[1]),
+            (curr_tile.local_coords[0] + 1, curr_tile.local_coords[1]),
+            (curr_tile.local_coords[0], curr_tile.local_coords[1] - 1),
+            (curr_tile.local_coords[0], curr_tile.local_coords[1] + 1),
+        ]
+        valid_positions = [
+            pos
+            for pos in valid_positions
+            if pos[0] >= 0
+            and pos[1] >= 0
+            and pos[0] < curr_building.internal_dims[0]
+            and pos[1] < curr_building.internal_dims[1]
+        ]
+
+        # Filter out positions that are already occupied
+        unoccupied_positions = []
+        for pos in valid_positions:
+            tile = curr_building.get_tile(pos)
+            if tile and not tile.get_occupants():
+                unoccupied_positions.append(pos)
+
+        # Check if there are any valid unoccupied positions
+        if not unoccupied_positions:
+            return  # No valid moves available
+
+        if coords:
+            # Verify the specified coordinates are valid and unoccupied
+            if coords not in unoccupied_positions:
+                return
+        else:
+            # Choose a random unoccupied position
+            coords = random.choice(unoccupied_positions)
+
+        # Find the new tile in the building
+        new_tile = curr_building.get_tile(coords)
+        curr_tile.remove_occupant(self)
+        new_tile.add_occupant(self)
 
     def __repr__(self) -> str:
         data = {

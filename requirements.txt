@@ -3,3 +3,4 @@ nltk
 google-generativeai
 einops
 rdflib
+urwid>=2.1.2

@@ -29,6 +29,8 @@ class Tile(Entity):
 
     building: "Building"
     local_coords: Tuple[int, int]
+    world: "World"
+    # occupants: list[Entity] # No longer storing occupants directly on tile
 
     def __init__(
         self,
@@ -44,14 +46,20 @@ class Tile(Entity):
 
         self.world = world
         world.add_edge(self, "part_of", self.building)
+        # self.occupants = [] # Removed direct occupant list
+
+    def get_occupants(self) -> List["Entity"]:
+        """Returns a list of entities currently occupying this tile."""
+        occupying_entities = [
+            obj for _, _, obj in self.world.get_edges(self, "is_occupied_by")
+        ]
+
+        return list(set(occupying_entities))  # Remove duplicates if any
 
     def add_occupant(self, entity: Entity):
         from character import Character
 
-        # General relationships for any entity on the tile
-        self.world.add_edge(entity, "inside", self.building)
-        self.world.add_edge(entity, "location", self)
-
+        print(f"adding occupant {entity.name}")
         if isinstance(entity, Character):
             # Check if a character already occupies this tile
             existing_character_occupants = self.world.get_edges(
@@ -62,8 +70,8 @@ class Tile(Entity):
             ):  # If the list is not empty, a character is already there
                 # Assuming occupant_entity name is useful for the error message, get it from the first entry
                 occupant_name = (
-                    existing_character_occupants[0][1].name
-                    if hasattr(existing_character_occupants[0][1], "name")
+                    existing_character_occupants[0][2].name
+                    if hasattr(existing_character_occupants[0][2], "name")
                     else "Unknown Occupant"
                 )
                 print(existing_character_occupants)
@@ -74,6 +82,24 @@ class Tile(Entity):
         else:
             # For non-character entities, use a different predicate
             self.world.add_edge(self, "contains", entity)
+
+        # General relationships for any entity on the tile
+        self.world.add_edge(entity, "inside", self.building)
+        self.world.add_edge(entity, "location", self)
+
+    def remove_occupant(self, entity: Entity):
+        """Removes an entity from this tile in the knowledge graph."""
+        from character import Character
+
+        # Remove the general relationships
+        self.world.remove_edge(entity, "inside", self.building)
+        self.world.remove_edge(entity, "location", self)
+
+        # Remove the specific relationship based on entity type
+        if isinstance(entity, Character):
+            self.world.remove_edge(self, "is_occupied_by", entity)
+        else:
+            self.world.remove_edge(self, "contains", entity)
 
     def __repr__(self) -> str:
         return f"Tile(name='{self.name}', building='{self.building.name}', coords={self.local_coords})"
@@ -86,22 +112,17 @@ class Tile(Entity):
         return spo
 
     def render(self) -> str:
-        """Renders the tile based on its occupant."""
-        # Prioritize rendering Character
-        character_occupants = self.world.get_edges(
-            source=self, predicate="is_occupied_by"
-        )
-        if character_occupants:  # If the list is not empty, a Character is there
-            character_entity = character_occupants[0][2]
-            return character_entity.render()
-
-        # If no character, check for other entities
-        other_entities = self.world.get_edges(source=self, predicate="contains")
-        if other_entities:  # If the list is not empty
-            # Get the first entity's name and use it to look up the emoji
-            entity_name = other_entities[0][2].name
-            return get_item_emoji(entity_name)
-
+        """Renders the tile. Returns a character representing the tile's state."""
+        occupants = self.get_occupants()
+        if occupants:
+            # For simplicity, use the first letter of the first occupant's name or type
+            # You might want more sophisticated rendering based on occupant type
+            occupant = occupants[0]
+            return (
+                occupant.name[0].upper()
+                if occupant.name
+                else occupant.__class__.__name__[0].upper()
+            )
         return "."  # Empty tile
 
 
@@ -235,7 +256,10 @@ class Province(Entity):
         self.world = world
 
     def create_building(
-        self, name: str, building_coords: List[Tuple[int, int]]
+        self,
+        name: str,
+        building_coords: List[Tuple[int, int]],
+        building_dims: Tuple[int, int] = (5, 5),
     ) -> Building:
         """Adds a building to the province grid."""
         x, y = building_coords
@@ -247,7 +271,7 @@ class Province(Entity):
             raise ValueError(
                 f"Coordinate ({x}, {y}) is already occupied by building '{self.buildings[x][y].name}'."
             )
-        building = Building(name, building_coords, self, self.world)
+        building = Building(name, building_coords, self, self.world, building_dims)
 
         self.buildings[x][y] = building
         return building
@@ -369,8 +393,14 @@ class World(KnowledgeGraph):
         return [entity for _, entity in self.graph.out_edges(name)]
 
     @property
+    def living_entities(self) -> List[Entity]:
+        from character import Character
+
+        return [node for node in self.graph.nodes if isinstance(node, Character)]
+
+    @property
     def locations(self) -> List[Entity]:
-        return [node for node in self.graph.nodes if type(node) in [Building]]
+        return [node for node in self.graph.nodes if isinstance(node, Building)]
 
     def query(self, query: str) -> Dict[UUID, List[Tuple[str, str, str]]]:
         uuid_to_spo = {}

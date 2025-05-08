@@ -94,6 +94,35 @@ class KnowledgeGraph:
 
         return edges_found
 
+    def remove_edge(
+        self,
+        subject: Union[Entity, str, UUID],
+        predicate: str,
+        object_node: Union[Entity, str, UUID],
+    ) -> None:
+        """
+        Removes an edge from the graph based on source, predicate, and object.
+
+        Args:
+            subject: The source node of the edge.
+            predicate: The type of relationship (edge's 'relation' attribute).
+            object_node: The target node of the edge.
+        """
+        # Find the edge keys with matching relation
+        if not self.graph.has_node(subject) or not self.graph.has_node(object_node):
+            return
+
+        edge_keys_to_remove = []
+        # Get all edges between subject and object_node
+        if self.graph.has_edge(subject, object_node):
+            for key, data in self.graph.get_edge_data(subject, object_node).items():
+                if data.get("relation") == predicate:
+                    edge_keys_to_remove.append(key)
+
+        # Remove the edges using the keys
+        for key in edge_keys_to_remove:
+            self.graph.remove_edge(subject, object_node, key)
+
 
 # %%
 # Q/A

@@ -1,4 +1,5 @@
-from relationships import RelationshipType, ActionType, HistoryPredicateTypes
+from enums import RelationshipType, ActionType, HistoryPredicateTypes
+
 
 predicates = (
     [item.value for item in RelationshipType]

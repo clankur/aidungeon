@@ -8,11 +8,6 @@ from google.genai import types
 from typeguard import typechecked
 from typing import Dict, Any, Tuple
 import ast
-from relationships import (
-    RelationshipType,
-    ActionType,
-    HistoryPredicateTypes,
-)  # Import the enums
 from commons import MODEL_NAME
 from declarations import add_edge_declaration, create_character_declaration
 from character import Character
