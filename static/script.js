@@ -1,0 +1,92 @@
+const API_BASE_URL = 'http://localhost:5001'; // Your Flask backend URL
+
+async function fetchWorldState() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/world_state`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch world state:", error);
+        document.getElementById('world-info').textContent = 'Error loading world state. Is the backend running?';
+        return null;
+    }
+}
+
+function renderBuilding(buildingData, container) {
+    container.innerHTML = ''; // Clear previous state
+
+    if (!buildingData) {
+        container.textContent = 'No building data to render.';
+        return;
+    }
+
+    const buildingElement = document.createElement('div');
+    buildingElement.className = 'building';
+    
+    const buildingNameElement = document.createElement('h2');
+    buildingNameElement.textContent = buildingData.name || 'Unnamed Building';
+    buildingElement.appendChild(buildingNameElement);
+
+    const gridElement = document.createElement('div');
+    gridElement.className = 'building-grid';
+    
+    const [width, height] = buildingData.internal_dims;
+    gridElement.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
+    gridElement.style.gridTemplateRows = `repeat(${height}, 1fr)`;
+
+    // tiles_grid is [row][col] which means [y][x]
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const tileCell = document.createElement('div');
+            tileCell.className = 'tile';
+            tileCell.dataset.x = x;
+            tileCell.dataset.y = y;
+
+            const tileData = buildingData.tiles_grid[y][x];
+            if (tileData && tileData.occupants && tileData.occupants.length > 0) {
+                // For simplicity, render the first occupant
+                // In your data, occupant.render is the emoji/char
+                tileCell.textContent = tileData.occupants[0].render; 
+                tileCell.classList.add('occupied');
+                tileCell.title = tileData.occupants.map(o => `${o.name} (${o.type})`).join(', ');
+            } else {
+                tileCell.textContent = '.'; // Default for empty tile
+            }
+            gridElement.appendChild(tileCell);
+        }
+    }
+    buildingElement.appendChild(gridElement);
+    container.appendChild(buildingElement);
+}
+
+function updateWorldInfo(worldState) {
+    const infoElement = document.getElementById('world-info');
+    if (worldState) {
+        infoElement.textContent = `World Time: ${worldState.world_time}`;
+    }
+}
+
+async function main() {
+    const worldState = await fetchWorldState();
+    const gameContainer = document.getElementById('game-container');
+    
+    updateWorldInfo(worldState);
+
+    if (worldState && worldState.buildings && worldState.buildings.length > 0) {
+        // For now, render the first building
+        renderBuilding(worldState.buildings[0], gameContainer);
+    } else {
+        gameContainer.textContent = 'No buildings found in the world state.';
+         if (worldState && !worldState.buildings) {
+            console.error("worldState.buildings is undefined or null", worldState);
+        }
+    }
+}
+
+// Initial load
+main();
+
+// TODO: Add functions for player character selection, movement (WASD), chat UI
+// TODO: Periodically refresh world state or use WebSockets for real-time updates 

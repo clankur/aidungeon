@@ -1,0 +1,36 @@
+body {
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+    background-color: #f0f0f0;
+}
+#game-container {
+    margin-top: 20px;
+}
+.building-grid {
+    display: grid;
+    border: 1px solid #333;
+    box-shadow: 3px 3px 5px #ccc;
+}
+.tile {
+    width: 60px; /* Increased from 40px */
+    height: 60px; /* Increased from 40px */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #ddd;
+    font-size: 48px; /* Increased from 24px */
+    background-color: #fff;
+}
+.tile.occupied {
+    /* background-color: #e0e0e0; */ /* Optional: different bg for occupied tiles */
+}
+#world-info {
+    margin-bottom: 15px;
+    font-size: 1.1em;
+}
+h2 {
+    margin-bottom: 5px;
+} 
