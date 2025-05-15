@@ -5,7 +5,7 @@ from item import Entity, Item
 from world import Building, World, Tile
 from entity import Entity
 import json
-from enums import get_character_emoji, RelationshipType
+from enums import get_character_emoji, RelationshipType, Direction
 
 
 class PhysicalAttributes:
@@ -80,6 +80,10 @@ class Character(Entity):
             sex=sex, birth=actual_birth_time, race=race
         )
         self.world = world
+        if not hasattr(location, "add_occupant"):
+            raise TypeError(
+                f"Location for character {name} must be a Tile object, got {type(location)}"
+            )
         location.add_occupant(self)
 
     def add_familial_edge(
@@ -93,56 +97,106 @@ class Character(Entity):
         else:
             raise ValueError(f"Invalid predicate: {predicate}")
 
-    def move(self, coords: Optional[Tuple[int, int]] = None) -> None:
-        curr_location = self.world.get_edges(
+    def move(self, direction: Direction) -> bool:
+        """Moves the character one tile in the specified direction if valid."""
+        curr_location_edges = self.world.get_edges(
             predicate="is_occupied_by", object_node=self
         )
-        if len(curr_location) == 0:
-            raise ValueError(f"Character {self.name} has no location! {curr_location}")
-        if len(curr_location) > 1:
-            raise ValueError(
-                f"Character {self.name} in multiple tiles! {curr_location}"
-            )
-        curr_tile: Tile = curr_location[0][0]
-        curr_building = curr_tile.building
-        valid_positions = [
-            (curr_tile.local_coords[0] - 1, curr_tile.local_coords[1]),
-            (curr_tile.local_coords[0] + 1, curr_tile.local_coords[1]),
-            (curr_tile.local_coords[0], curr_tile.local_coords[1] - 1),
-            (curr_tile.local_coords[0], curr_tile.local_coords[1] + 1),
-        ]
-        valid_positions = [
-            pos
-            for pos in valid_positions
-            if pos[0] >= 0
-            and pos[1] >= 0
-            and pos[0] < curr_building.internal_dims[0]
-            and pos[1] < curr_building.internal_dims[1]
-        ]
+        if not curr_location_edges:
+            return False
 
-        # Filter out positions that are already occupied
-        unoccupied_positions = []
-        for pos in valid_positions:
-            tile = curr_building.get_tile(pos)
-            if tile and not tile.get_occupants():
-                unoccupied_positions.append(pos)
+        curr_tile_entity = curr_location_edges[0][0]
 
-        # Check if there are any valid unoccupied positions
-        if not unoccupied_positions:
-            return  # No valid moves available
+        if not (
+            hasattr(curr_tile_entity, "local_coords")
+            and hasattr(curr_tile_entity, "building")
+        ):
+            return False
 
-        if coords:
-            # Verify the specified coordinates are valid and unoccupied
-            if coords not in unoccupied_positions:
-                return
+        curr_tile: "Tile" = curr_tile_entity
+        curr_building: "Building" = curr_tile.building
+
+        dx, dy = 0, 0
+        if direction == Direction.NORTH:
+            dy = -1
+        elif direction == Direction.SOUTH:
+            dy = 1
+        elif direction == Direction.WEST:
+            dx = -1
+        elif direction == Direction.EAST:
+            dx = 1
         else:
-            # Choose a random unoccupied position
-            coords = random.choice(unoccupied_positions)
+            return False
 
-        # Find the new tile in the building
-        new_tile = curr_building.get_tile(coords)
-        curr_tile.remove_occupant(self)
-        new_tile.add_occupant(self)
+        target_coords = (curr_tile.local_coords[0] + dx, curr_tile.local_coords[1] + dy)
+
+        if not (
+            0 <= target_coords[0] < curr_building.internal_dims[0]
+            and 0 <= target_coords[1] < curr_building.internal_dims[1]
+        ):
+            return False
+
+        target_tile = curr_building.get_tile(target_coords)
+        if not target_tile:
+            return False
+
+        for occupant in target_tile.get_occupants():
+            if isinstance(occupant, Character):
+                return False
+
+        try:
+            curr_tile.remove_occupant(self)
+            target_tile.add_occupant(self)
+            return True
+        except ValueError as e:
+            return False
+
+    def chat(self, target_character: "Character", message: str) -> bool:
+        """Allows the character to chat with an adjacent character."""
+        if not isinstance(target_character, Character):
+            return False
+
+        if self == target_character:
+            return False
+
+        self_location_edges = self.world.get_edges(
+            predicate="is_occupied_by", object_node=self
+        )
+        if not self_location_edges:
+            return False
+        self_tile_entity = self_location_edges[0][0]
+        if not (
+            hasattr(self_tile_entity, "local_coords")
+            and hasattr(self_tile_entity, "building")
+        ):
+            return False
+        self_tile: "Tile" = self_tile_entity
+
+        target_location_edges = self.world.get_edges(
+            predicate="is_occupied_by", object_node=target_character
+        )
+        if not target_location_edges:
+            return False
+        target_tile_entity = target_location_edges[0][0]
+        if not (
+            hasattr(target_tile_entity, "local_coords")
+            and hasattr(target_tile_entity, "building")
+        ):
+            return False
+        target_tile: "Tile" = target_tile_entity
+
+        if self_tile.building.uuid != target_tile.building.uuid:
+            return False
+
+        dx = abs(self_tile.local_coords[0] - target_tile.local_coords[0])
+        dy = abs(self_tile.local_coords[1] - target_tile.local_coords[1])
+
+        if (dx == 1 and dy == 0) or (dx == 0 and dy == 1):
+            timestamp = self.world.get_current_world_time()
+            # TODO: implement chat functionality as an event
+            return True
+        else:
+            return False
 
     def __repr__(self) -> str:
         data = {
