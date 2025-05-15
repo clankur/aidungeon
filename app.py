@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from uuid import UUID
 
@@ -302,6 +302,13 @@ def action_chat_endpoint():  # Renamed
                 "message": "Chat failed (e.g., not adjacent or other issue).",
             }
         )
+
+
+@app.route("/")
+def serve_index():
+    # Assumes index.html is in the same directory as app.py
+    # If it's in a 'static' subdirectory, you'd use 'static'
+    return send_from_directory(".", "index.html")
 
 
 if __name__ == "__main__":
