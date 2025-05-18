@@ -11,8 +11,32 @@
     <div id="world-info">
         Loading world state...
     </div>
+
+    <div id="character-selection-container">
+        <h2>Select Your Character</h2>
+        <select id="character-select-dropdown">
+            <option value="">--Select a Character--</option>
+        </select>
+        <p>Selected Character: <span id="selected-character-name">None</span></p>
+    </div>
+
     <div id="game-container">
         <!-- Building grid will be rendered here -->
+    </div>
+
+    <div id="chat-container">
+        <h2>Chat</h2>
+        <div id="chat-log">
+            <p><em>Chat messages will appear here...</em></p>
+        </div>
+        <div id="chat-input-area">
+            <label for="chat-target-select">Chat with:</label>
+            <select id="chat-target-select">
+                <option value="">--Select Target--</option>
+            </select>
+            <input type="text" id="chat-message-input" placeholder="Enter message...">
+            <button id="send-chat-button">Send</button>
+        </div>
     </div>
 
     <script src="static/script.js" defer></script>
