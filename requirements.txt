@@ -1,8 +1,8 @@
 typeguard
 nltk
-google-generativeai
+google-genai
 einops
 rdflib
-urwid>=2.1.2
 flask
 flask_cors
+networkx

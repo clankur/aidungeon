@@ -2,66 +2,38 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from uuid import UUID
 
-# Your existing project imports
-from world import World, Building, Tile, TerrainType  # TerrainType is in world.py
+from world import World, Building, Tile, TerrainType
 from character import Character
-from enums import Direction  # Assuming Direction is now in enums/__init__.py
-
-# graph.py for KnowledgeGraph if direct access is needed, but World is a KG
-# entity.py for Entity if needed for type checking beyond Character/Building
+from enums import Direction
 
 
 # --- World Initialization ---
 def initialize_world():
-    # World(world_dims, region_dims, province_dims, graph=None)
     world_instance = World(
         world_dims=(1, 1),
-        region_dims=(1, 1),  # Region internal grid for provinces
-        province_dims=(10, 10),  # Province internal grid for buildings/terrain features
+        region_dims=(1, 1),
+        province_dims=(10, 10),
     )
 
-    # Access the defaultly created region and province
-    # Assuming world_dims=(1,1) means region (0,0) exists
-    # Assuming region_dims=(1,1) means province (0,0) within that region exists
-    try:
-        default_region = world_instance.regions[(0, 0)]
-        # Province __init__ takes (region, coords, province_dims, terrain, world)
-        # Region __init__ creates its provinces.
-        # province_dims in Region.__init__ refers to the grid size of the province itself (e.g., 10x10 tiles for buildings)
-        # The province_dims passed to World constructor is used by Region for creating its Provinces.
-        default_province = default_region.subregions[0][0]
-    except KeyError:
-        print(
-            "Error: Default region or province not found during initialization. Check World/Region setup."
-        )
-        # Fallback or raise error
-        # For now, let's try to create them if not found, though World init should handle it.
-        # This indicates a potential mismatch with World/Region constructor logic if it fails.
-        default_region = world_instance.create_region(
-            region_coord=(0, 0)
-        )  # This might need more args
-        default_province = default_region.subregions[0][0]
+    default_region = world_instance.create_region(
+        region_coord=(0, 0)
+    )
+    default_province = default_region.subregions[0][0]
 
-    # Create a Building in the default province
-    # Building.__init__(name, coords, province, world, internal_dims)
-    # Coords are within the province for the building.
     building1 = Building(
         name="Test House",
-        coords=(2, 2),  # Position of the building in the province grid
+        coords=(2, 2),
         province=default_province,
         world=world_instance,
-        internal_dims=(5, 5),  # 5x5 grid inside the building
+        internal_dims=(5, 5),
     )
-    # Building's __init__ (via Entity) should add it to the world graph.
 
-    # Add Characters
-    # Character.__init__(name, sex, race, location: Tile, world, birth_time)
     tile_char1 = building1.find_unoccupied_tile()
     if tile_char1:
-        Character(  # Assign to variable if you need to reference it later, e.g. char1 = ...
+        Character(
             name="Alice",
             sex="female",
-            race="human",  # Ensure 'human' is valid for get_character_emoji
+            race="human",
             location=tile_char1,
             world=world_instance,
         )
@@ -73,7 +45,7 @@ def initialize_world():
         Character(
             name="Bob",
             sex="male",
-            race="orc",  # Ensure 'orc' is valid
+            race="orc",
             location=tile_char2,
             world=world_instance,
         )
@@ -91,7 +63,7 @@ game_world = initialize_world()
 
 
 # --- Helper Functions for Serialization ---
-def serialize_tile(tile: Tile):  # Removed world param, not used
+def serialize_tile(tile: Tile):
     occupants_data = []
     for occupant_entity in tile.get_occupants():
         render_char = "."
@@ -112,11 +84,10 @@ def serialize_tile(tile: Tile):  # Removed world param, not used
         "id": str(tile.uuid),
         "local_coords": tile.local_coords,
         "occupants": occupants_data,
-        # "type": "floor", # Could add explicit tile type if Tile has such an attribute
     }
 
 
-def serialize_building(building: Building):  # Removed world param
+def serialize_building(building: Building):
     tiles_grid = []
     for y in range(building.internal_dims[1]):
         row_data = []
@@ -140,7 +111,7 @@ def serialize_building(building: Building):  # Removed world param
 def get_world_characters_info(world: World) -> list[dict]:
     characters_info = []
     if hasattr(world, "graph") and world.graph:
-        for node_obj in world.graph.nodes():  # Iterate over nodes directly
+        for node_obj in world.graph.nodes():
             if isinstance(node_obj, Character):
                 loc_edges = world.get_edges(
                     predicate="is_occupied_by", object_node=node_obj
@@ -174,7 +145,7 @@ def get_world_characters_info(world: World) -> list[dict]:
 
 # --- API Endpoints ---
 @app.route("/world_state", methods=["GET"])
-def get_world_state_endpoint():  # Renamed to avoid conflict with any variable
+def get_world_state_endpoint():
     buildings_data = []
     if hasattr(game_world, "graph") and game_world.graph:
         for node_obj in game_world.graph.nodes():
@@ -201,7 +172,7 @@ def _find_entity_by_uuid(world: World, entity_uuid: UUID, entity_type: type):
 
 
 @app.route("/action/move", methods=["POST"])
-def action_move_endpoint():  # Renamed
+def action_move_endpoint():
     data = request.get_json()
     character_id_str = data.get("character_id")
     direction_str = data.get("direction")
@@ -214,11 +185,10 @@ def action_move_endpoint():  # Renamed
 
     try:
         character_uuid = UUID(character_id_str)
-        # Ensure direction_str is a valid key in Direction enum
         if direction_str.upper() not in Direction.__members__:
             raise KeyError(f"Invalid direction string: {direction_str}")
         move_direction = Direction[direction_str.upper()]
-    except (ValueError, KeyError) as e:  # ValueError for UUID, KeyError for Direction
+    except (ValueError, KeyError) as e:
         return (
             jsonify(
                 {
@@ -228,7 +198,7 @@ def action_move_endpoint():  # Renamed
             ),
             400,
         )
-    except Exception as e:  # Catch any other unexpected errors during conversion
+    except Exception as e:
         return (
             jsonify({"success": False, "message": f"Error processing input: {str(e)}"}),
             400,
@@ -248,7 +218,7 @@ def action_move_endpoint():  # Renamed
                 "success": True,
                 "message": f"{character_to_move.name} moved {move_direction.name}.",
             }
-        )  # Use .name for Enum
+        )
     else:
         return jsonify(
             {
@@ -259,7 +229,7 @@ def action_move_endpoint():  # Renamed
 
 
 @app.route("/action/chat", methods=["POST"])
-def action_chat_endpoint():  # Renamed
+def action_chat_endpoint():
     data = request.get_json()
     source_char_id_str = data.get("source_character_id")
     target_char_id_str = data.get("target_character_id")
@@ -306,8 +276,6 @@ def action_chat_endpoint():  # Renamed
 
 @app.route("/")
 def serve_index():
-    # Assumes index.html is in the same directory as app.py
-    # If it's in a 'static' subdirectory, you'd use 'static'
     return send_from_directory(".", "index.html")
 
 

@@ -30,7 +30,6 @@ class Tile(Entity):
     building: "Building"
     local_coords: Tuple[int, int]
     world: "World"
-    # occupants: list[Entity] # No longer storing occupants directly on tile
 
     def __init__(
         self,
@@ -46,7 +45,6 @@ class Tile(Entity):
 
         self.world = world
         world.add_edge(self, "part_of", self.building)
-        # self.occupants = [] # Removed direct occupant list
 
     def get_occupants(self) -> List["Entity"]:
         """Returns a list of entities currently occupying this tile."""
@@ -54,7 +52,7 @@ class Tile(Entity):
             obj for _, _, obj in self.world.get_edges(self, "is_occupied_by")
         ]
 
-        return list(set(occupying_entities))  # Remove duplicates if any
+        return list(set(occupying_entities)) 
 
     def add_occupant(self, entity: Entity):
         from character import Character
@@ -123,7 +121,7 @@ class Tile(Entity):
                 if occupant.name
                 else occupant.__class__.__name__[0].upper()
             )
-        return "."  # Empty tile
+        return "."
 
 
 class Building(Entity):
@@ -177,7 +175,6 @@ class Building(Entity):
 
     def find_unoccupied_tile(self) -> Optional["Tile"]:
         """Randomly finds the first unoccupied tile in the building (by a Character)."""
-        # from character import Character # No longer needed due to simplified check
 
         occupied_tiles_coords = [
             tile.local_coords
@@ -291,7 +288,7 @@ class Province(Entity):
         )
 
     def __str__(self) -> str:
-        region_str = str(self.region).replace("\n", "\n  ")  # Indent region info
+        region_str = str(self.region).replace("\n", "\n  ")
         return f"Province(name={self.name}, coords={self.coords}, terrain={self.terrain}\n region={region_str}\n)"
 
     def __repr__(self) -> str:
