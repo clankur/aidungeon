@@ -1,48 +1,11 @@
 # %%
-from graph import KnowledgeGraph
-from typing import List
+from typing import List, Dict, Any
+from world import World
+from transformers import pipeline
 import torch
-from transformers import AutoTokenizer, AutoModel, pipeline
 import einops
 from sentence_transformers import SentenceTransformer
 import torch.nn.functional as F
-from typing import Tuple
-
-# %%
-RELATIONSHIP_MAP = {
-    "Antonym": "is the opposite of",
-    "AtLocation": "is located at",
-    "CapableOf": "is capable of",
-    "Causes": "causes",
-    "CausesDesire": "makes someone want to",
-    "CreatedBy": "is created by",
-    "DefinedAs": "is defined as",
-    "DerivedFrom": "is derived from",
-    "Desires": "wants",
-    "DistinctFrom": "is distinct from",
-    "Entails": "entails",
-    "EtymologicallyDerivedFrom": "comes etymologically from",
-    "EtymologicallyRelatedTo": "is etymologically related to",
-    "FormOf": "is a form of",
-    "HasA": "has a",
-    "HasContext": "is used in the context of",
-    "HasProperty": "has the property of",
-    "InstanceOf": "is an instance of",
-    "IsA": "is a",
-    "LocatedNear": "is located near",
-    "MadeOf": "is made of",
-    "MannerOf": "is a manner of",
-    "MotivatedByGoal": "is motivated by the goal of",
-    "NotCapableOf": "is not capable of",
-    "NotDesires": "does not desire",
-    "NotHasProperty": "does not have the property of",
-    "PartOf": "is part of",
-    "RelatedTo": "is related to",
-    "SimilarTo": "is similar to",
-    "SymbolOf": "is a symbol of",
-    "Synonym": "is a synonym of",
-    "UsedFor": "is used for",
-}
 
 
 # %%
@@ -65,20 +28,6 @@ def quiet_softmax(logits: torch.Tensor) -> torch.Tensor:
     return probs
 
 
-def get_en_pred_obj(pred_obj: Tuple[str, str]) -> str:
-    """
-    converts a tuple of (pred_obj, score) to a string of the form. ie).
-    (/r/IsA, /c/en/president_of_united_states) -> "IsA president of united states"
-    """
-    pred_uri, obj_uri = pred_obj
-
-    pred_name = str(pred_uri).split("/")[-1]
-    pred_name = RELATIONSHIP_MAP.get(pred_name, pred_name)
-    obj_name = str(obj_uri).replace("/c/en/", "").replace("_", " ")
-
-    return f"{pred_name} {obj_name}"
-
-
 # %%
 class Retriever:
     def __init__(self) -> None:
@@ -88,38 +37,26 @@ class Retriever:
         # OpenMatch/cocodr-base-msmarco => good retrievers
         # answerdotai/ModernBERT-base
         self.encoder = SentenceTransformer(model_name)
+        ner_model_name = "Babelscape/wikineural-multilingual-ner"
+        self.ner_model = pipeline(
+            "ner", model=ner_model_name, aggregation_strategy="simple"
+        )
 
-        ner_model_name = "dslim/bert-base-NER"
-        self.ner_model = pipeline("ner", model=ner_model_name)
-
-    def get_relevant_entities(self, query: str, graph: KnowledgeGraph) -> List[str]:
+    def get_relevant_entities(
+        self, query: str, world: World, create_entities: bool = False
+    ) -> List[str]:
         ner_results = self.ner_model(query)
 
-        entities = []
-        current = ""
-        for r in ner_results:
-            tag = r["entity"]
-            word = r["word"]
+        # TODO: observe if we need to filter out based on score
+        # cursory glance, 0.5 and higher seems reasonable
+        entities = set([r["word"] for r in ner_results])
 
-            if tag.startswith("B-"):
-                if current:
-                    entities.append(current.strip())
-                current = word if not word.startswith("##") else word[2:]
-            elif tag.startswith("I-"):
-                if word.startswith("##"):
-                    current += word[2:]
-                else:
-                    current += " " + word
-            else:
-                if current:
-                    entities.append(current.strip())
-                    current = ""
-
-        if current:
-            entities.append(current.strip())
-
+        if create_entities:
+            for e in entities:
+                if not world.contains(e):
+                    world.add_node(e)
         print(f"{entities=}")
-        return [e for e in entities if graph.contains(e)]
+        return [e for e in entities if world.contains(e)]
 
     def encode_text(self, text: str) -> torch.Tensor:
         """
@@ -138,55 +75,64 @@ class Retriever:
         return embedding
 
     def retrieve(
-        self, query: str, graph: KnowledgeGraph, threshold: float = 0.75
-    ) -> List[str]:
+        self, query: str, world: World, threshold: float = 0.75
+    ) -> Dict[str, Dict[str, Any]]:
         query_embedding = self.encode_text(query)
-        relevant_entities = self.get_relevant_entities(query, graph)
+        relevant_entities = self.get_relevant_entities(query, world)
         if not relevant_entities:
-            raise ValueError("No relevant entities found in the graph")
-        # convert graph to n_edges x C tensor
-        triples = []
-        relationships = []
+            raise ValueError("No relevant entities found in the world")
+        # convert world to n_edges x C tensor
+        triples = {}
 
-        # TODO: adjust so encodings done in parallel
+        # TODO: can we query in parallel?
         for entity in relevant_entities:
-            for predicate, object in graph.query(entity):
-                pred_obj = get_en_pred_obj((predicate, object))
-                triple = f"{entity} {pred_obj}"
-                relationships.append(triple)
-                triple_embedding = self.encode_text(triple)
-                triple_embedding = einops.rearrange(triple_embedding, "b d -> (b d)")
-                triples.append(triple_embedding)
+            for uid, results in world.query(entity).items():
+                triples[uid] = {
+                    "embedding": [],
+                    "relationships": [],
+                }
+                for _, predicate, object in results:
+                    triple = f"{entity} {predicate} {object}"
+                    triples[uid]["relationships"].append(triple)
+                    triple_embedding = self.encode_text(triple)
+                    triple_embedding = einops.rearrange(
+                        triple_embedding, "b d -> (b d)"
+                    )
+                    triples[uid]["embedding"].append(triple_embedding)
 
-        relationship_embeddings = torch.stack(triples)
+                relationship_embeddings = torch.stack(triples[uid]["embedding"])
+                logits = einops.einsum(
+                    query_embedding,
+                    relationship_embeddings,
+                    "Q_len C, n_edges C -> Q_len n_edges",
+                )
+                scores = quiet_softmax(logits)
+                scores = einops.rearrange(scores, "1 n_edges -> n_edges")
+                triples[uid]["scores"] = scores
 
-        logits = einops.einsum(
-            query_embedding,
-            relationship_embeddings,
-            "Q_len C, n_edges C -> Q_len n_edges",
-        )
+                sorted_indices = torch.argsort(scores, descending=True)
+                sorted_scores = scores[sorted_indices]
+                cumulative_scores = torch.cumsum(sorted_scores, dim=0)
+                mask = cumulative_scores <= threshold
 
-        scores = quiet_softmax(logits)
-        scores = einops.rearrange(scores, "1 n_edges -> n_edges")
+                # Add one more element after threshold is reached
+                if torch.any(~mask):
+                    first_false_idx = torch.where(~mask)[0][0]
+                    if first_false_idx > 0:  # Ensure we don't go out of bounds
+                        mask[first_false_idx] = True
 
-        sorted_indices = torch.argsort(scores, descending=True)
-        sorted_scores = scores[sorted_indices]
-        cumulative_scores = torch.cumsum(sorted_scores, dim=0)
-        mask = cumulative_scores <= threshold
+                selected_indices = sorted_indices[mask]
 
-        # Add one more element after threshold is reached
-        if torch.any(~mask):
-            first_false_idx = torch.where(~mask)[0][0]
-            if first_false_idx > 0:  # Ensure we don't go out of bounds
-                mask[first_false_idx] = True
+                retrieved_edges = [
+                    (triples[uid]["relationships"][idx.item()])
+                    for idx in selected_indices
+                ]
+                triples[uid]["retrieved_edges"] = (
+                    retrieved_edges,
+                    triples[uid]["scores"].sum().item(),
+                )
 
-        selected_indices = sorted_indices[mask]
-
-        retrieved_edges = [
-            (relationships[idx.item()], scores[idx].item()) for idx in selected_indices
-        ]
-
-        return retrieved_edges
+        return triples
 
 
 #
