@@ -15,9 +15,7 @@ def initialize_world():
         province_dims=(10, 10),
     )
 
-    default_region = world_instance.create_region(
-        region_coord=(0, 0)
-    )
+    default_region = world_instance.create_region(region_coord=(0, 0))
     default_province = default_region.subregions[0][0]
 
     building1 = Building(
@@ -230,12 +228,14 @@ def action_move_endpoint():
 
 @app.route("/action/chat", methods=["POST"])
 def action_chat_endpoint():
+    # TODO: character sends message
+    # neighboring characters hear message
+    # storyteller updates their response based on hearing
     data = request.get_json()
     source_char_id_str = data.get("source_character_id")
-    target_char_id_str = data.get("target_character_id")
     message = data.get("message")
 
-    if not source_char_id_str or not target_char_id_str or message is None:
+    if not source_char_id_str or message is None:
         return (
             jsonify({"success": False, "message": "Missing required chat parameters"}),
             400,
@@ -243,7 +243,6 @@ def action_chat_endpoint():
 
     try:
         source_uuid = UUID(source_char_id_str)
-        target_uuid = UUID(target_char_id_str)
     except ValueError:
         return (
             jsonify({"success": False, "message": "Invalid character ID format"}),
@@ -251,27 +250,16 @@ def action_chat_endpoint():
         )
 
     source_char = _find_entity_by_uuid(game_world, source_uuid, Character)
-    target_char = _find_entity_by_uuid(game_world, target_uuid, Character)
 
     if not source_char:
         return jsonify({"success": False, "message": "Source character not found"}), 404
-    if not target_char:
-        return jsonify({"success": False, "message": "Target character not found"}), 404
 
     if not isinstance(message, str):
         return jsonify({"success": False, "message": "Message must be a string"}), 400
 
-    success = source_char.chat(target_char, message)
-    if success:
-        game_world.curr_time += 1
-        return jsonify({"success": True, "message": "Chat successful."})
-    else:
-        return jsonify(
-            {
-                "success": False,
-                "message": "Chat failed (e.g., not adjacent or other issue).",
-            }
-        )
+    success = source_char.chat(message)
+    game_world.curr_time += 1
+    return jsonify({"success": success, "message": "Chat successful."})
 
 
 @app.route("/")

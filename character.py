@@ -4,6 +4,7 @@ from typing import Optional, List, Tuple
 from item import Entity, Item
 from world import Building, World, Tile
 from entity import Entity
+from event import ChatEvent
 import json
 from enums import get_character_emoji, RelationshipType, Direction
 
@@ -86,6 +87,26 @@ class Character(Entity):
             )
         location.add_occupant(self)
 
+    def get_current_tile(self) -> Optional["Tile"]:
+        """Gets the current tile occupied by the character."""
+        tile_edges = self.world.get_edges(predicate="is_occupied_by", object_node=self)
+        if not tile_edges:
+            return None
+
+        assert len(tile_edges) == 1
+        # Only 1 edge [source, predicate, object] where source is the tile
+        tile_entity = tile_edges[0][0]
+
+        # Validate if it's a proper tile.
+        if (
+            not isinstance(tile_entity, Tile)
+            or not hasattr(tile_entity, "local_coords")
+            or not hasattr(tile_entity, "building")
+        ):
+            return None
+
+        return tile_entity
+
     def add_familial_edge(
         self,
         subject: "Character",
@@ -99,22 +120,11 @@ class Character(Entity):
 
     def move(self, direction: Direction) -> bool:
         """Moves the character one tile in the specified direction if valid."""
-        curr_location_edges = self.world.get_edges(
-            predicate="is_occupied_by", object_node=self
-        )
-        if not curr_location_edges:
+        current_tile = self.get_current_tile()
+        if not current_tile:
             return False
 
-        curr_tile_entity = curr_location_edges[0][0]
-
-        if not (
-            hasattr(curr_tile_entity, "local_coords")
-            and hasattr(curr_tile_entity, "building")
-        ):
-            return False
-
-        curr_tile: "Tile" = curr_tile_entity
-        curr_building: "Building" = curr_tile.building
+        curr_building: "Building" = current_tile.building
 
         dx, dy = 0, 0
         if direction == Direction.NORTH:
@@ -128,8 +138,12 @@ class Character(Entity):
         else:
             return False
 
-        target_coords = (curr_tile.local_coords[0] + dx, curr_tile.local_coords[1] + dy)
+        target_coords = (
+            current_tile.local_coords[0] + dx,
+            current_tile.local_coords[1] + dy,
+        )
 
+        # Check target_coords is in bounds of building
         if not (
             0 <= target_coords[0] < curr_building.internal_dims[0]
             and 0 <= target_coords[1] < curr_building.internal_dims[1]
@@ -145,58 +159,45 @@ class Character(Entity):
                 return False
 
         try:
-            curr_tile.remove_occupant(self)
+            current_tile.remove_occupant(self)
             target_tile.add_occupant(self)
             return True
         except ValueError as e:
             return False
 
-    def chat(self, target_character: "Character", message: str) -> bool:
-        """Allows the character to chat with an adjacent character."""
-        if not isinstance(target_character, Character):
-            return False
+    def chat(self, message: str) -> bool:
+        """Character sends message which is heard by all characters in the same building."""
+        current_tile = self.get_current_tile()
+        if not current_tile:
+            return False  # Cannot chat if not on a tile
 
-        if self == target_character:
-            return False
+        # Create the ChatEvent, using speaker=self as per recent changes to event.py
+        chat_event = ChatEvent(world=self.world, speaker=self, message=message)
 
-        self_location_edges = self.world.get_edges(
-            predicate="is_occupied_by", object_node=self
-        )
-        if not self_location_edges:
-            return False
-        self_tile_entity = self_location_edges[0][0]
-        if not (
-            hasattr(self_tile_entity, "local_coords")
-            and hasattr(self_tile_entity, "building")
-        ):
-            return False
-        self_tile: "Tile" = self_tile_entity
+        # The character "said" the event
+        self.world.add_edge(self, "said", chat_event)
 
-        target_location_edges = self.world.get_edges(
-            predicate="is_occupied_by", object_node=target_character
-        )
-        if not target_location_edges:
-            return False
-        target_tile_entity = target_location_edges[0][0]
-        if not (
-            hasattr(target_tile_entity, "local_coords")
-            and hasattr(target_tile_entity, "building")
-        ):
-            return False
-        target_tile: "Tile" = target_tile_entity
+        # current_tile is guaranteed to be a valid Tile here if not None.
+        curr_building: "Building" = current_tile.building
 
-        if self_tile.building.uuid != target_tile.building.uuid:
-            return False
+        # Find listeners in the same building
+        listeners = [
+            entity
+            for (entity, _, _) in self.world.get_edges(
+                predicate="inside", object_node=curr_building
+            )
+            if entity != self
+            and isinstance(entity, Character)  # Ensure listeners are Characters
+        ]
 
-        dx = abs(self_tile.local_coords[0] - target_tile.local_coords[0])
-        dy = abs(self_tile.local_coords[1] - target_tile.local_coords[1])
+        for person in listeners:
+            self.world.add_edge(
+                person,
+                "heard",
+                chat_event,
+            )
 
-        if (dx == 1 and dy == 0) or (dx == 0 and dy == 1):
-            timestamp = self.world.get_current_world_time()
-            # TODO: implement chat functionality as an event
-            return True
-        else:
-            return False
+        return True
 
     def __repr__(self) -> str:
         data = {
