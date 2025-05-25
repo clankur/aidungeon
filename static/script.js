@@ -1,7 +1,7 @@
 const API_BASE_URL = 'http://localhost:5001'; // Your Flask backend URL
 
 let selectedCharacterId = null;
-let selectedChatTargetId = null; // For chat
+// let selectedChatTargetId = null; // For chat - REMOVED
 let allCharacters = []; // Store all characters for easy access
 
 async function fetchWorldState() {
@@ -32,14 +32,14 @@ function renderBuilding(buildingData, container) {
 
     const buildingElement = document.createElement('div');
     buildingElement.className = 'building';
-    
+
     const buildingNameElement = document.createElement('h2');
     buildingNameElement.textContent = buildingData.name || 'Unnamed Building';
     buildingElement.appendChild(buildingNameElement);
 
     const gridElement = document.createElement('div');
     gridElement.className = 'building-grid';
-    
+
     const [width, height] = buildingData.internal_dims;
     gridElement.style.gridTemplateColumns = `repeat(${width}, 1fr)`;
     gridElement.style.gridTemplateRows = `repeat(${height}, 1fr)`;
@@ -56,7 +56,7 @@ function renderBuilding(buildingData, container) {
             if (tileData && tileData.occupants && tileData.occupants.length > 0) {
                 // For simplicity, render the first occupant
                 // In your data, occupant.render is the emoji/char
-                tileCell.textContent = tileData.occupants[0].render; 
+                tileCell.textContent = tileData.occupants[0].render;
                 tileCell.classList.add('occupied');
                 tileCell.title = tileData.occupants.map(o => `${o.name} (${o.type})`).join(', ');
             } else {
@@ -95,52 +95,31 @@ function populateCharacterDropdown(characters) {
         if (selectedCharacterId) {
             const selectedChar = characters.find(c => c.id === selectedCharacterId);
             selectedCharacterNameDisplay.textContent = selectedChar ? selectedChar.name : 'None';
-            populateChatTargetDropdown(allCharacters, selectedCharacterId); // Update chat targets
+            // populateChatTargetDropdown(allCharacters, selectedCharacterId); // Update chat targets - REMOVED
         } else {
             selectedCharacterNameDisplay.textContent = 'None';
-            populateChatTargetDropdown([], null); // Clear chat targets if no char selected
+            // populateChatTargetDropdown([], null); // Clear chat targets if no char selected - REMOVED
         }
         console.log("Selected character ID:", selectedCharacterId);
     });
 }
 
-function populateChatTargetDropdown(characters, currentPlayerId) {
-    const dropdown = document.getElementById('chat-target-select');
-    dropdown.innerHTML = '<option value="">--Select Target--</option>'; // Clear existing options
-    selectedChatTargetId = null; // Reset target selection
-
-    if (characters && characters.length > 0 && currentPlayerId) {
-        characters.forEach(character => {
-            if (character.id !== currentPlayerId) { // Don't allow chatting with oneself
-                const option = document.createElement('option');
-                option.value = character.id;
-                option.textContent = `${character.name} (${character.race})`;
-                dropdown.appendChild(option);
-            }
-        });
-    }
-
-    dropdown.addEventListener('change', (event) => {
-        selectedChatTargetId = event.target.value;
-        console.log("Selected chat target ID:", selectedChatTargetId);
-    });
-}
-
-function addMessageToChatLog(sourceName, targetName, message, isSystem = false, success = true) {
+function addMessageToChatLog(sourceName, message, isSystem = false, success = true) { // targetName removed
     const chatLog = document.getElementById('chat-log');
     const messageElement = document.createElement('p');
-    
+
     if (isSystem) {
         messageElement.innerHTML = `<em>${message}</em>`;
         if (!success) messageElement.style.color = 'red';
     } else {
-        messageElement.textContent = `${sourceName} to ${targetName}: ${message}`;
+        // Adjusted message format for broadcast
+        messageElement.textContent = `${sourceName} says: ${message}`;
     }
-    
+
     // If it's the placeholder, remove it
     const placeholder = chatLog.querySelector('em');
     if (placeholder && placeholder.textContent.includes("Chat messages will appear here")) {
-        chatLog.innerHTML = ''; 
+        chatLog.innerHTML = '';
     }
 
     chatLog.appendChild(messageElement);
@@ -152,27 +131,24 @@ async function sendChatMessage() {
     const message = messageInput.value.trim();
 
     if (!selectedCharacterId) {
-        addMessageToChatLog(null, null, "You must select your character first.", true, false);
-        return;
-    }
-    if (!selectedChatTargetId) {
-        addMessageToChatLog(null, null, "You must select a target character to chat with.", true, false);
+        addMessageToChatLog(null, "You must select your character first.", true, false);
         return;
     }
     if (!message) {
-        addMessageToChatLog(null, null, "You cannot send an empty message.", true, false);
+        addMessageToChatLog(null, "You cannot send an empty message.", true, false);
         return;
     }
 
     const sourceChar = allCharacters.find(c => c.id === selectedCharacterId);
-    const targetChar = allCharacters.find(c => c.id === selectedChatTargetId);
+    // const targetChar = allCharacters.find(c => c.id === selectedChatTargetId); // REMOVED
 
-    if (!sourceChar || !targetChar) {
-        addMessageToChatLog(null, null, "Error finding source or target character.", true, false);
+    if (!sourceChar) { // targetChar check removed
+        addMessageToChatLog(null, "Error finding source character.", true, false); // Adjusted error message
         return;
     }
 
-    console.log(`Sending chat from ${sourceChar.name} (ID: ${selectedCharacterId}) to ${targetChar.name} (ID: ${selectedChatTargetId}): ${message}`);
+    // Adjusted console log for broadcast
+    console.log(`Sending chat from ${sourceChar.name} (ID: ${selectedCharacterId}): ${message}`);
 
     try {
         const response = await fetch(`${API_BASE_URL}/action/chat`, {
@@ -182,21 +158,23 @@ async function sendChatMessage() {
             },
             body: JSON.stringify({
                 source_character_id: selectedCharacterId,
-                target_character_id: selectedChatTargetId,
+                // target_character_id: selectedChatTargetId, // REMOVED
                 message: message,
             }),
         });
         const result = await response.json();
         if (result.success) {
-            addMessageToChatLog(sourceChar.name, targetChar.name, message);
+            addMessageToChatLog(sourceChar.name, message); // targetChar.name removed
             messageInput.value = ''; // Clear input field on success
             await refreshWorldView(); // Refresh world (e.g. time might have passed)
         } else {
-            addMessageToChatLog(sourceChar.name, targetChar.name, `Chat failed: ${result.message}`, true, false);
+            // Adjusted for broadcast context
+            addMessageToChatLog(sourceChar.name, `Chat failed: ${result.message}`, true, false);
             console.error("Chat failed:", result.message);
         }
     } catch (error) {
-        addMessageToChatLog(sourceChar.name, targetChar.name, `Error sending chat: ${error}`, true, false);
+        // Adjusted for broadcast context
+        addMessageToChatLog(sourceChar.name, `Error sending chat: ${error}`, true, false);
         console.error("Error sending chat message:", error);
     }
 }
@@ -233,9 +211,16 @@ async function moveCharacter(characterId, direction) {
 }
 
 function handleKeyPress(event) {
+    // Check if the chat input is focused
+    const chatInput = document.getElementById('chat-message-input');
+    if (document.activeElement === chatInput) {
+        // console.log("Chat input is focused. Ignoring key press for movement.");
+        return;
+    }
+
     if (!selectedCharacterId) {
         // console.log("No character selected. Ignoring key press for movement.");
-        return; 
+        return;
     }
 
     let direction = null;
@@ -262,7 +247,7 @@ function handleKeyPress(event) {
 async function refreshWorldView() {
     const worldState = await fetchWorldState();
     const gameContainer = document.getElementById('game-container');
-    
+
     updateWorldInfo(worldState);
     // populateCharacterDropdown(worldState.characters); // Refresh dropdown if characters can change dynamically
 
@@ -272,7 +257,7 @@ async function refreshWorldView() {
         renderBuilding(worldState.buildings[0], gameContainer);
     } else {
         gameContainer.textContent = 'No buildings found in the world state.';
-         if (worldState && !worldState.buildings) {
+        if (worldState && !worldState.buildings) {
             console.error("worldState.buildings is undefined or null", worldState);
         }
     }
@@ -281,14 +266,14 @@ async function refreshWorldView() {
 async function main() {
     const worldState = await fetchWorldState();
     const gameContainer = document.getElementById('game-container');
-    
+
     updateWorldInfo(worldState);
 
     if (worldState && worldState.characters) {
         // allCharacters is already set by fetchWorldState
         populateCharacterDropdown(allCharacters);
-        // Initialize chat target dropdown (it will be empty until a character is selected)
-        populateChatTargetDropdown(allCharacters, null);
+        // Initialize chat target dropdown (it will be empty until a character is selected) - REMOVED
+        // populateChatTargetDropdown(allCharacters, null); 
     } else {
         console.warn("No characters found to populate dropdowns.");
     }
@@ -298,7 +283,7 @@ async function main() {
         renderBuilding(worldState.buildings[0], gameContainer);
     } else {
         gameContainer.textContent = 'No buildings found in the world state.';
-         if (worldState && !worldState.buildings) {
+        if (worldState && !worldState.buildings) {
             console.error("worldState.buildings is undefined or null", worldState);
         }
     }
