@@ -1,6 +1,7 @@
 typeguard
 nltk
 google-genai
+transformers[torch]
 einops
 rdflib
 flask
