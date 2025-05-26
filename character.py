@@ -1,6 +1,6 @@
 import random
 from graph import KnowledgeGraph
-from typing import Optional, List, Tuple
+from typing import Optional, List, Dict, Tuple, Any
 from item import Entity, Item
 from world import Building, World, Tile
 from entity import Entity
@@ -165,11 +165,11 @@ class Character(Entity):
         except ValueError as e:
             return False
 
-    def chat(self, message: str) -> bool:
+    def chat(self, message: str) -> Optional[Dict[str, Any]]:
         """Character sends message which is heard by all characters in the same building."""
         current_tile = self.get_current_tile()
         if not current_tile:
-            return False  # Cannot chat if not on a tile
+            return None  # Cannot chat if not on a tile
 
         # Create the ChatEvent, using speaker=self as per recent changes to event.py
         chat_event = ChatEvent(world=self.world, speaker=self, message=message)
@@ -181,23 +181,22 @@ class Character(Entity):
         curr_building: "Building" = current_tile.building
 
         # Find listeners in the same building
-        listeners = [
+        participants_entities = [
             entity
             for (entity, _, _) in self.world.get_edges(
                 predicate="inside", object_node=curr_building
             )
-            if entity != self
-            and isinstance(entity, Character)  # Ensure listeners are Characters
+            if isinstance(entity, Character)
         ]
+        # Serialize participant Character objects to their names or a serializable dict
+        # For now, let's assume participant names are sufficient for the event_data context
+        # If more detailed participant info is needed later, this can be expanded.
+        participants_serializable = [p.name for p in participants_entities]
 
-        for person in listeners:
-            self.world.add_edge(
-                person,
-                "heard",
-                chat_event,
-            )
-
-        return True
+        return {
+            "participants": participants_serializable,
+            "event": chat_event.to_dict(),
+        }
 
     def __repr__(self) -> str:
         data = {

@@ -1,16 +1,18 @@
 # %%
 import re
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
-from world import World, Building
-from retriever import Retriever
 from google import genai
 from google.genai import types
 from typeguard import typechecked
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, List
 import ast
-from commons import MODEL_NAME
+
 from declarations import add_edge_declaration, create_character_declaration
+from commons import MODEL_NAME
+from world import World, Building
+from retriever import Retriever
 from character import Character
+from event import Event, ChatEvent
 
 
 # %%
@@ -163,6 +165,26 @@ class Storyteller:
         print(triples)
 
         return text
+
+    def generate_event_response(
+        self, responder: Character, event_history: List["Event"]
+    ) -> Event:
+        traits_str = "\n".join(
+            [f"{s} {p} {o}" for s, p, o in responder.to_subject_predicate_object()]
+        )
+        event_history_str = "\n".join(map(str, event_history))
+        prompt = f"""
+            <instruction>
+            You are {responder.name} and these are your traits:
+            {traits_str}
+            Generate a response to this event history:
+            {event_history_str}
+            </instruction>
+        """
+        print(prompt)
+        # TODO: generate a event from model
+        response = ""
+        return ChatEvent(self.graph, responder, response)
 
 
 # %%

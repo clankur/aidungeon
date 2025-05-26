@@ -1,10 +1,13 @@
+import random
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from uuid import UUID
 
+from storyteller import Storyteller
 from world import World, Building, Tile, TerrainType
 from character import Character
 from enums import Direction
+from event import Event
 
 
 # --- World Initialization ---
@@ -54,10 +57,12 @@ def initialize_world():
 
 
 # --- Flask App Setup ---
+random.seed(420)
 app = Flask(__name__)
 CORS(app)
 
 game_world = initialize_world()
+game_master = Storyteller(game_world)
 
 
 # --- Helper Functions for Serialization ---
@@ -257,9 +262,30 @@ def action_chat_endpoint():
     if not isinstance(message, str):
         return jsonify({"success": False, "message": "Message must be a string"}), 400
 
-    success = source_char.chat(message)
+    event_data = source_char.chat(message)
+    print(f"{ event_data= }")
     game_world.curr_time += 1
-    return jsonify({"success": success, "message": "Chat successful."})
+    participants, chat_event = event_data.get("participants"), event_data.get("event")
+    conversation = [chat_event]
+    for person in participants:
+        if person != source_char:
+            game_world.add_edge(
+                person,
+                "heard",
+                chat_event,
+            )
+        # TODO: Have a way to classifiy if person "remembers" event in their history
+        # For now lets say everyone remembers everything
+
+        # storyteller generates a BRIEF response to the event
+        response = game_master.generate_event_response(person, conversation)
+        conversation.append(response)
+
+        # TODO: roll a 'die' to see if person responds
+
+        # recursively generate a conversation... but this could go on for ever
+
+    return jsonify({"data": True, "message": "Chat successful."})
 
 
 @app.route("/")

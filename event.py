@@ -33,7 +33,16 @@ class ChatEvent(Event):
         super().__init__(
             world, tile, name if name else f"ChatEvent_{world.get_current_world_time()}"
         )
+        self.speaker = speaker
         self.message = message
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "speaker_name": self.speaker.name,
+            "message": self.message,
+            # Add other relevant event attributes if needed
+        }
 
 
 class HistoricalEvent(Event):
@@ -45,3 +54,6 @@ class HistoricalEvent(Event):
     #   TODO: drill down on the conditions
     def __init__(self) -> None:
         super().__init__()
+
+
+# TODO: World has an event log that is easily Searchable by User, Time Period, Location
