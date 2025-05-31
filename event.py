@@ -1,4 +1,4 @@
-from typing import Optional, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 from world import World, Tile
 
 if TYPE_CHECKING:
@@ -20,6 +20,13 @@ class Event:
         self.world.add_edge(self, "location", self.location)
         self.world.add_edge(self, "occured_on", world.get_current_world_time())
 
+    def to_dict(self) -> Dict[str, str]:
+        return {
+            "name": self.name,
+            "location": self.location.name,
+            # Add other relevant event attributes if needed
+        }
+
 
 class ChatEvent(Event):
     def __init__(
@@ -36,13 +43,16 @@ class ChatEvent(Event):
         self.speaker = speaker
         self.message = message
 
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "speaker_name": self.speaker.name,
-            "message": self.message,
-            # Add other relevant event attributes if needed
-        }
+    def to_dict(self) -> Dict[str, str]:
+        event_dict = super().to_dict()
+        event_dict.update(
+            {
+                "speaker_name": self.speaker.name,
+                "message": self.message,
+                # Add other relevant event attributes if needed
+            }
+        )
+        return event_dict
 
 
 class HistoricalEvent(Event):

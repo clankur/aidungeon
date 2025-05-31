@@ -188,14 +188,9 @@ class Character(Entity):
             )
             if isinstance(entity, Character)
         ]
-        # Serialize participant Character objects to their names or a serializable dict
-        # For now, let's assume participant names are sufficient for the event_data context
-        # If more detailed participant info is needed later, this can be expanded.
-        participants_serializable = [p.name for p in participants_entities]
-
         return {
-            "participants": participants_serializable,
-            "event": chat_event.to_dict(),
+            "participants": participants_entities,
+            "event": chat_event,
         }
 
     def __repr__(self) -> str:

@@ -1,5 +1,6 @@
 # %%
 import re
+import json
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, pipeline
 from google import genai
 from google.genai import types
@@ -172,7 +173,10 @@ class Storyteller:
         traits_str = "\n".join(
             [f"{s} {p} {o}" for s, p, o in responder.to_subject_predicate_object()]
         )
-        event_history_str = "\n".join(map(str, event_history))
+
+        event_history_str = "\n".join(
+            map(lambda event: json.dumps(event.to_dict()), event_history)
+        )
         prompt = f"""
             <instruction>
             You are {responder.name} and these are your traits:
@@ -182,8 +186,8 @@ class Storyteller:
             </instruction>
         """
         print(prompt)
-        # TODO: generate a event from model
-        response = ""
+        # TODO: generate a event from Event from Gemini
+        response = "TEST"
         return ChatEvent(self.graph, responder, response)
 
 

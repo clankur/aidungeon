@@ -274,18 +274,24 @@ def action_chat_endpoint():
                 "heard",
                 chat_event,
             )
-        # TODO: Have a way to classifiy if person "remembers" event in their history
-        # For now lets say everyone remembers everything
+            # TODO: Have a way to classifiy if person "remembers" event in their history
+            #   For now lets say everyone remembers everything
 
-        # storyteller generates a BRIEF response to the event
-        response = game_master.generate_event_response(person, conversation)
-        conversation.append(response)
+            # TODO: roll a 'die' to see if person responds
+            response = game_master.generate_event_response(person, conversation)
+            conversation.append(response)
 
-        # TODO: roll a 'die' to see if person responds
+            # Consider recursively generate a conversation... but this could go on for ever
+            #   Conversations are a Tree that eventually get pruined....
+            #   Base Case would be for a check of the conversation to die
 
-        # recursively generate a conversation... but this could go on for ever
-
-    return jsonify({"data": True, "message": "Chat successful."})
+    return jsonify(
+        {
+            "success": True,
+            "message": "Chat successful.",
+            "conversation": [event.to_dict() for event in conversation],
+        }
+    )
 
 
 @app.route("/")

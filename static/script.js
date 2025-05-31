@@ -164,8 +164,15 @@ async function sendChatMessage() {
         });
         const result = await response.json();
         if (result.success) {
-            addMessageToChatLog(sourceChar.name, message); // targetChar.name removed
-            messageInput.value = ''; // Clear input field on success
+            // addMessageToChatLog(sourceChar.name, message); // targetChar.name removed
+            // Clear input field on success
+            messageInput.value = '';
+            // Iterate through the conversation and add each message to the chat log
+            if (result.conversation && Array.isArray(result.conversation)) {
+                result.conversation.forEach(chatEvent => {
+                    addMessageToChatLog(chatEvent.speaker_name, chatEvent.message);
+                });
+            }
             await refreshWorldView(); // Refresh world (e.g. time might have passed)
         } else {
             // Adjusted for broadcast context
