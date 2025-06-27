@@ -13,6 +13,7 @@ from commons import MODEL_NAME
 from world import World, Building
 from retriever import Retriever
 from character import Character
+from entity import Entity
 from event import Event, ChatEvent
 
 
@@ -72,6 +73,8 @@ class Storyteller:
             seed=0,
             temperature=0,
         )
+        self.event_log: List["Event"] = []
+        self.event_index_by_entity: Dict["Entity", List[int]] = {}
 
     def generate_character_story(self) -> str:
         character_prompt = f"""
@@ -168,15 +171,30 @@ class Storyteller:
         return text
 
     def generate_event_response(
-        self, responder: Character, event_history: List["Event"]
+        self, responder: Character, latest_events: List["Event"]
     ) -> Event:
         traits_str = "\n".join(
-            [f"{s} {p} {o}" for s, p, o in responder.to_subject_predicate_object()]
+            [f"* {s} {p} {o}" for s, p, o in responder.to_subject_predicate_object()]
         )
 
+        # pull past events that are relevant
+        responders_events = self.event_index_by_entity.get(responder)
+
+        summary_events = self.summarize_history(responder)
+        # WHAT IS A SUMMARY EVENT
+        # of the summary events find the ones most aligned
+        # add their full history to the prompt
+
+        # ALTERNATIVELY: can proompt to distinguish among relevant events
+        # TODO: weight recent elements higher
+        # cosine similarity between latest events and responders entire history
+        # retrieve events with high similarity
+        # TODO: Proompt Gemini to summarize blocks of events
+
         event_history_str = "\n".join(
-            map(lambda event: json.dumps(event.to_dict()), event_history)
+            map(lambda event: json.dumps(event.to_dict()), latest_events)
         )
+
         prompt = f"""
             <instruction>
             You are {responder.name} and these are your traits:
@@ -186,8 +204,9 @@ class Storyteller:
             </instruction>
         """
         print(prompt)
-        # TODO: generate a event from Event from Gemini
-        response = "TEST"
+        response = self.client.models.generate_content(
+            model=self.model_name, contents=prompt, config=self.gen_config
+        ).text
         return ChatEvent(self.graph, responder, response)
 
 

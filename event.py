@@ -1,4 +1,7 @@
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import List, Dict, Optional, TYPE_CHECKING
+import json
+from google import genai
+from google.genai import types
 from world import World, Tile
 
 if TYPE_CHECKING:
@@ -53,6 +56,44 @@ class ChatEvent(Event):
             }
         )
         return event_dict
+
+
+class SummaryEvent(Event):
+    def __init__(
+        self,
+        world: World,
+        tile: Tile,
+        event_block: List[Event],
+        name: str | None = None,
+    ) -> None:
+        super().__init__(world, tile, name)
+        self.event_block = event_block
+
+        event_history_str = "\n".join(
+            map(lambda event: json.dumps(event.to_dict()), event_block)
+        )
+
+        client = genai.Client()
+        prompt = f"""
+            <instruction>
+            You are an expert summarizer. Generate a concise summary of the following events:
+            {event_history_str} 
+            </instruction>
+        """
+        response = client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                seed=0,
+                temperature=0,
+            ),
+        ).text
+
+        self.summary = response.text  # prompt Gemini to make a summary
+
+        # does the name have the summary of the events
+        # lets make a summary just a few sentences (upto 3?)
 
 
 class HistoricalEvent(Event):
